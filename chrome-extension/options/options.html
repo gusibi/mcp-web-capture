@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MCP 网页内容采集工具 - 设置</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>MCP 网页内容采集工具</h1>
+      <div class="subtitle">设置</div>
+    </header>
+    
+    <div class="settings-form">
+      <!-- 服务器设置 -->
+      <div class="form-section">
+        <h2 class="section-title">
+          <span class="icon">🖥️</span>
+          服务器设置
+        </h2>
+        
+        <div class="form-group">
+          <label for="serverUrl">WebSocket 服务器地址</label>
+          <input type="text" id="serverUrl" placeholder="例如: ws://localhost:8765">
+        </div>
+        
+        <div class="form-group">
+          <label for="apiKey">API 密钥</label>
+          <input type="password" id="apiKey" placeholder="输入API密钥">
+        </div>
+        
+        <div class="form-group">
+          <div class="checkbox-group">
+            <input type="checkbox" id="autoConnect">
+            <label for="autoConnect">启动时自动连接服务器</label>
+          </div>
+        </div>
+      </div>
+      
+      <!-- 图片设置 -->
+      <div class="form-section">
+        <h2 class="section-title">
+          <span class="icon">🖼️</span>
+          图片设置
+        </h2>
+        
+        <div class="form-group">
+          <label for="imageFormat">图片格式</label>
+          <select id="imageFormat">
+            <option value="png">PNG (无损)</option>
+            <option value="jpeg">JPEG (有损)</option>
+            <option value="webp">WebP (高压缩率)</option>
+          </select>
+        </div>
+        
+        <div class="form-group">
+          <label for="imageQuality">图片质量</label>
+          <div class="range-container">
+            <input type="range" id="imageQuality" min="10" max="100" step="1" value="90">
+            <span id="qualityValue" class="range-value">90</span>
+          </div>
+        </div>
+        
+        <div class="form-group">
+          <label for="imagePath">图片保存路径</label>
+          <input type="text" id="imagePath" placeholder="例如: /downloads/mcp-images">
+        </div>
+      </div>
+      
+      <!-- 内容提取设置 -->
+      <div class="form-section">
+        <h2 class="section-title">
+          <span class="icon">📋</span>
+          内容提取设置
+        </h2>
+        
+        <div class="form-group">
+          <div class="checkbox-group">
+            <input type="checkbox" id="extractImages" checked>
+            <label for="extractImages">提取图片</label>
+          </div>
+          
+          <div class="checkbox-group">
+            <input type="checkbox" id="extractLinks" checked>
+            <label for="extractLinks">提取链接</label>
+          </div>
+        </div>
+        
+        <div class="form-group">
+          <button id="manageRulesBtn" class="btn primary">管理自定义提取规则</button>
+        </div>
+      </div>
+    </div>
+    
+    <div class="actions">
+      <button id="resetBtn" class="btn danger">重置设置</button>
+      <button id="saveBtn" class="btn primary">保存设置</button>
+    </div>
+    
+    <div id="saveNotification" class="notification"></div>
+  </div>
+  
+  <!-- 规则管理对话框 -->
+  <div id="rulesDialog" class="dialog-overlay">
+    <div class="dialog">
+      <div class="dialog-header">
+        <div class="dialog-title">管理自定义提取规则</div>
+        <button id="closeDialogBtn" class="dialog-close">&times;</button>
+      </div>
+      
+      <div class="dialog-content">
+        <ul id="rulesList" class="rules-list">
+          <!-- 规则列表将通过JavaScript动态生成 -->
+        </ul>
+        
+        <button id="addRuleBtn" class="btn primary">添加新规则</button>
+        
+        <!-- 规则表单 -->
+        <div id="ruleForm" class="rule-form">
+          <h3 id="ruleFormTitle" class="rule-form-title">添加提取规则</h3>
+          
+          <div class="form-group">
+            <label for="ruleName">规则名称</label>
+            <input type="text" id="ruleName" placeholder="例如: 新闻文章">
+          </div>
+          
+          <div class="form-group">
+            <label for="urlPattern">URL 匹配模式 (正则表达式)</label>
+            <input type="text" id="urlPattern" placeholder="例如: .*\\.news\\.com\\/article\\/.*">
+          </div>
+          
+          <div class="form-group">
+            <label>选择器</label>
+            <div id="selectorInputs" class="selector-inputs">
+              <!-- 选择器字段将通过JavaScript动态生成 -->
+            </div>
+            <button id="addSelectorBtn" class="btn secondary" type="button">添加选择器</button>
+          </div>
+          
+          <div class="rule-form-actions">
+            <button id="cancelRuleBtn" class="btn secondary">取消</button>
+            <button id="saveRuleBtn" class="btn primary">保存规则</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <script type="module" src="options.js"></script>
+</body>
+</html>

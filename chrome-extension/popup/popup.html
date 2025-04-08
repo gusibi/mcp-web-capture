@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MCP 网页内容采集工具</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="popup-container">
+    <header class="popup-header">
+      <h1>MCP 网页内容采集工具</h1>
+      <div class="connection-status">
+        <span id="statusDot" class="status-dot disconnected"></span>
+        <span id="statusText">未连接</span>
+      </div>
+      <div id="serverInfo" class="server-info">服务器: 未配置</div>
+    </header>
+    
+    <div class="action-buttons">
+      <button id="connectBtn" class="btn primary">
+        <span class="icon">🔌</span>
+        <span class="label">连接服务器</span>
+      </button>
+      <button id="disconnectBtn" class="btn secondary" disabled>
+        <span class="icon">🔌</span>
+        <span class="label">断开连接</span>
+      </button>
+    </div>
+    
+    <div class="content-actions">
+      <div class="action-group">
+        <button id="captureBtn" class="btn action">
+          <span class="icon">📷</span>
+          <span class="label">截图当前页面</span>
+        </button>
+        <div class="option-group">
+          <input type="checkbox" id="fullPageCapture" checked>
+          <label for="fullPageCapture">全页面截图</label>
+        </div>
+      </div>
+      
+      <div class="action-group">
+        <button id="extractBtn" class="btn action">
+          <span class="icon">📋</span>
+          <span class="label">提取当前页面内容</span>
+        </button>
+      </div>
+    </div>
+    
+    <div id="resultPreview" class="result-preview" style="display: none;">
+      <div class="preview-header">
+        <h3>结果预览</h3>
+        <div class="preview-actions">
+          <button id="saveResultBtn" class="btn small">
+            <span class="icon">💾</span>
+            <span class="label">保存</span>
+          </button>
+          <button id="copyResultBtn" class="btn small">
+            <span class="icon">📋</span>
+            <span class="label">复制</span>
+          </button>
+          <button id="closePreviewBtn" class="btn small secondary">
+            <span class="icon">✖</span>
+          </button>
+        </div>
+      </div>
+      <div id="previewContent" class="preview-content"></div>
+    </div>
+    
+    <footer class="popup-footer">
+      <button id="openOptionsBtn" class="btn text">
+        <span class="icon">⚙️</span>
+        <span class="label">设置</span>
+      </button>
+    </footer>
+  </div>
+  
+  <script src="popup.js" type="module"></script>
+</body>
+</html>

@@ -1,0 +1,4 @@
+# WebSocket 核心依赖
+websockets==11.0.3
+aiohttp==3.9.1
+
