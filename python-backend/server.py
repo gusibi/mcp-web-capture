@@ -18,6 +18,10 @@ from websocket_server import WebSocketServer
 from mcp_protocol import MCPProtocol
 from task_queue import TaskQueue
 from utils.security import generate_api_key, validate_api_key
+from mcp.server.fastmcp import FastMCP
+
+# Initialize FastMCP server
+mcp = FastMCP("browser_mcp")
 
 # 配置日志
 logging.basicConfig(
