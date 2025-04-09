@@ -427,29 +427,53 @@ function saveResult() {
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
 
         if (currentResult.type === 'screenshot') {
-            // 保存截图
+            // 保存截图，使用chrome.downloads.download API
             const filename = `screenshot_${timestamp}.png`;
-            const a = document.createElement('a');
-            a.href = currentResult.dataUrl;
-            a.download = filename;
-            a.click();
 
-            // 显示保存成功提示，包含文件名
-            showSuccess(`截图已保存为 ${filename}！<br>保存位置：浏览器默认下载文件夹`);
+            // 将dataUrl转换为Blob
+            fetch(currentResult.dataUrl)
+                .then(res => res.blob())
+                .then(blob => {
+                    const url = URL.createObjectURL(blob);
+
+                    // 使用chrome.downloads.download API，设置saveAs为true让用户选择保存位置
+                    chrome.downloads.download({
+                        url: url,
+                        filename: filename,
+                        saveAs: true
+                    }, (downloadId) => {
+                        if (chrome.runtime.lastError) {
+                            showError(`保存失败: ${chrome.runtime.lastError.message}`);
+                        } else {
+                            showSuccess(`截图已保存为 ${filename}！`);
+                        }
+                        // 释放URL对象
+                        setTimeout(() => URL.revokeObjectURL(url), 100);
+                    });
+                })
+                .catch(error => {
+                    showError(`保存失败: ${error.message}`);
+                });
         } else if (currentResult.type === 'content') {
             // 保存内容为JSON
             const filename = `content_${timestamp}.json`;
             const blob = new Blob([JSON.stringify(currentResult.content, null, 2)], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = filename;
-            a.click();
 
-            setTimeout(() => URL.revokeObjectURL(url), 100);
-
-            // 显示保存成功提示，包含文件名
-            showSuccess(`内容已保存为 ${filename}！<br>保存位置：浏览器默认下载文件夹`);
+            // 使用chrome.downloads.download API，设置saveAs为true让用户选择保存位置
+            chrome.downloads.download({
+                url: url,
+                filename: filename,
+                saveAs: true
+            }, (downloadId) => {
+                if (chrome.runtime.lastError) {
+                    showError(`保存失败: ${chrome.runtime.lastError.message}`);
+                } else {
+                    showSuccess(`内容已保存为 ${filename}！`);
+                }
+                // 释放URL对象
+                setTimeout(() => URL.revokeObjectURL(url), 100);
+            });
         }
     } catch (error) {
         showError(`保存失败: ${error.message}`);

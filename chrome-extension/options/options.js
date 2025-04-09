@@ -3,9 +3,6 @@
  * 负责处理设置页面的用户交互和数据管理
  */
 
-// 导入模块
-import contentExtractor from '../lib/extractor.js';
-
 // DOM 元素
 const serverUrlInput = document.getElementById('serverUrl');
 const apiKeyInput = document.getElementById('apiKey');
@@ -13,7 +10,6 @@ const autoConnectCheckbox = document.getElementById('autoConnect');
 const imageFormatSelect = document.getElementById('imageFormat');
 const imageQualityInput = document.getElementById('imageQuality');
 const qualityValueSpan = document.getElementById('qualityValue');
-const imagePathInput = document.getElementById('imagePath');
 const extractImagesCheckbox = document.getElementById('extractImages');
 const extractLinksCheckbox = document.getElementById('extractLinks');
 const saveBtn = document.getElementById('saveBtn');
@@ -50,6 +46,9 @@ function initOptions() {
     updateQualityValue();
 }
 
+// 初始化选项页面
+document.addEventListener('DOMContentLoaded', initOptions);
+
 // 加载保存的设置
 function loadSettings() {
     chrome.storage.sync.get([
@@ -58,7 +57,6 @@ function loadSettings() {
         'autoConnect',
         'imageFormat',
         'imageQuality',
-        'imagePath',
         'extractImages',
         'extractLinks'
     ], (result) => {
@@ -84,11 +82,6 @@ function loadSettings() {
         if (result.imageQuality) {
             imageQualityInput.value = result.imageQuality;
             updateQualityValue();
-        }
-
-        // 设置图片保存路径
-        if (result.imagePath) {
-            imagePathInput.value = result.imagePath;
         }
 
         // 设置提取选项
@@ -150,7 +143,6 @@ async function saveSettings() {
                 autoConnect: autoConnectCheckbox.checked,
                 imageFormat: imageFormatSelect.value,
                 imageQuality: parseInt(imageQualityInput.value),
-                imagePath: imagePathInput.value,
                 extractImages: extractImagesCheckbox.checked,
                 extractLinks: extractLinksCheckbox.checked
             }, () => {
@@ -185,7 +177,7 @@ function resetSettings() {
     autoConnectCheckbox.checked = false;
     imageFormatSelect.value = 'png';
     imageQualityInput.value = 90;
-    imagePathInput.value = '';
+
     extractImagesCheckbox.checked = true;
     extractLinksCheckbox.checked = true;
 
@@ -231,67 +223,6 @@ function openRulesDialog() {
 function closeRulesDialog() {
     rulesDialog.style.display = 'none';
     hideRuleForm();
-}
-
-// 加载规则列表
-function loadRulesList() {
-    // 清空列表
-    rulesList.innerHTML = '';
-
-    // 获取所有规则
-    const rules = contentExtractor.getCustomRules();
-
-    if (rules.length === 0) {
-        // 没有规则时显示提示
-        const emptyItem = document.createElement('li');
-        emptyItem.className = 'empty-item';
-        emptyItem.textContent = '暂无自定义提取规则';
-        rulesList.appendChild(emptyItem);
-        return;
-    }
-
-    // 添加每个规则到列表
-    rules.forEach(rule => {
-        const item = document.createElement('li');
-
-        // 规则信息
-        const infoDiv = document.createElement('div');
-        infoDiv.className = 'rule-info';
-
-        const nameSpan = document.createElement('span');
-        nameSpan.className = 'rule-name';
-        nameSpan.textContent = rule.name;
-
-        const patternSpan = document.createElement('span');
-        patternSpan.className = 'rule-pattern';
-        patternSpan.textContent = rule.urlPattern;
-
-        infoDiv.appendChild(nameSpan);
-        infoDiv.appendChild(patternSpan);
-
-        // 规则操作
-        const actionsDiv = document.createElement('div');
-        actionsDiv.className = 'rule-actions';
-
-        const editBtn = document.createElement('button');
-        editBtn.className = 'btn small';
-        editBtn.textContent = '编辑';
-        editBtn.addEventListener('click', () => editRule(rule));
-
-        const deleteBtn = document.createElement('button');
-        deleteBtn.className = 'btn small danger';
-        deleteBtn.textContent = '删除';
-        deleteBtn.addEventListener('click', () => deleteRule(rule.name));
-
-        actionsDiv.appendChild(editBtn);
-        actionsDiv.appendChild(deleteBtn);
-
-        // 添加到列表项
-        item.appendChild(infoDiv);
-        item.appendChild(actionsDiv);
-
-        rulesList.appendChild(item);
-    });
 }
 
 // 显示规则表单
@@ -413,13 +344,37 @@ async function saveRule() {
             selectors: selectors
         };
 
-        // 如果是编辑，先删除旧规则
-        if (currentEditRule) {
-            await contentExtractor.removeCustomRule(currentEditRule.name);
-        }
+        // 从存储中获取现有规则
+        await new Promise((resolve, reject) => {
+            chrome.storage.sync.get(['extractionRules'], async (result) => {
+                try {
+                    let rules = result.extractionRules || [];
 
-        // 添加规则
-        await contentExtractor.addCustomRule(rule);
+                    // 如果是编辑，先删除旧规则
+                    if (currentEditRule) {
+                        rules = rules.filter(r => r.name !== currentEditRule.name);
+                    }
+
+                    // 添加新规则
+                    rules.push(rule);
+
+                    // 保存回存储
+                    await new Promise((saveResolve, saveReject) => {
+                        chrome.storage.sync.set({ extractionRules: rules }, () => {
+                            if (chrome.runtime.lastError) {
+                                saveReject(new Error(chrome.runtime.lastError.message));
+                            } else {
+                                saveResolve();
+                            }
+                        });
+                    });
+
+                    resolve();
+                } catch (error) {
+                    reject(error);
+                }
+            });
+        });
 
         // 重新加载规则列表
         loadRulesList();
@@ -447,8 +402,32 @@ async function deleteRule(ruleName) {
     }
 
     try {
-        // 删除规则
-        await contentExtractor.removeCustomRule(ruleName);
+        // 从存储中获取现有规则
+        await new Promise((resolve, reject) => {
+            chrome.storage.sync.get(['extractionRules'], async (result) => {
+                try {
+                    let rules = result.extractionRules || [];
+
+                    // 过滤掉要删除的规则
+                    rules = rules.filter(rule => rule.name !== ruleName);
+
+                    // 保存回存储
+                    await new Promise((saveResolve, saveReject) => {
+                        chrome.storage.sync.set({ extractionRules: rules }, () => {
+                            if (chrome.runtime.lastError) {
+                                saveReject(new Error(chrome.runtime.lastError.message));
+                            } else {
+                                saveResolve();
+                            }
+                        });
+                    });
+
+                    resolve();
+                } catch (error) {
+                    reject(error);
+                }
+            });
+        });
 
         // 重新加载规则列表
         loadRulesList();
@@ -460,5 +439,65 @@ async function deleteRule(ruleName) {
     }
 }
 
-// 初始化选项页面
-document.addEventListener('DOMContentLoaded', initOptions);
+// 加载规则列表
+function loadRulesList() {
+    // 清空列表
+    rulesList.innerHTML = '';
+
+    // 从浏览器存储中获取所有规则
+    chrome.storage.sync.get(['extractionRules'], (result) => {
+        const rules = result.extractionRules || [];
+
+        if (rules.length === 0) {
+            // 没有规则时显示提示
+            const emptyItem = document.createElement('li');
+            emptyItem.className = 'empty-item';
+            emptyItem.textContent = '暂无自定义提取规则';
+            rulesList.appendChild(emptyItem);
+            return;
+        }
+
+        // 添加每个规则到列表
+        rules.forEach(rule => {
+            const item = document.createElement('li');
+
+            // 规则信息
+            const infoDiv = document.createElement('div');
+            infoDiv.className = 'rule-info';
+
+            const nameSpan = document.createElement('span');
+            nameSpan.className = 'rule-name';
+            nameSpan.textContent = rule.name;
+
+            const patternSpan = document.createElement('span');
+            patternSpan.className = 'rule-pattern';
+            patternSpan.textContent = rule.urlPattern;
+
+            infoDiv.appendChild(nameSpan);
+            infoDiv.appendChild(patternSpan);
+
+            // 规则操作
+            const actionsDiv = document.createElement('div');
+            actionsDiv.className = 'rule-actions';
+
+            const editBtn = document.createElement('button');
+            editBtn.className = 'btn small';
+            editBtn.textContent = '编辑';
+            editBtn.addEventListener('click', () => editRule(rule));
+
+            const deleteBtn = document.createElement('button');
+            deleteBtn.className = 'btn small danger';
+            deleteBtn.textContent = '删除';
+            deleteBtn.addEventListener('click', () => deleteRule(rule.name));
+
+            actionsDiv.appendChild(editBtn);
+            actionsDiv.appendChild(deleteBtn);
+
+            // 添加到列表项
+            item.appendChild(infoDiv);
+            item.appendChild(actionsDiv);
+
+            rulesList.appendChild(item);
+        });
+    });
+}
