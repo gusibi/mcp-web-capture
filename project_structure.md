@@ -33,8 +33,7 @@ browser-tools-mcp/
 └── python-backend/             # Python 后端服务目录
     ├── requirements.txt         # 依赖包列表
     ├── config.py                # 配置文件
-    ├── server.py                # 主服务器入口
-    ├── websocket_server.py      # WebSocket 服务器实现
+    ├── main.py                # 主服务器入口
     ├── mcp_protocol.py          # MCP 协议处理
     ├── task_queue.py            # 任务队列管理
     ├── handlers/                # 指令处理器
@@ -61,8 +60,9 @@ browser-tools-mcp/
 - WebSocket API
 
 ### Python 后端服务
-- Python 3.8+
-- WebSocket (websockets 库)
+- Python 3.10+
+- Fastapi (Server 库)
+- Fastapi-MCP (MCP 库)
 - 异步 I/O (asyncio)
 - 图像处理 (Pillow)
 - 内容解析 (BeautifulSoup4, lxml)

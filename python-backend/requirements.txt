@@ -1,6 +1,7 @@
 # WebSocket 核心依赖
 websockets==11.0.3
 aiohttp==3.9.1
-mcp[cli]
 starlette
 uvicorn
+fastapi
+fastapi-mcp==0.1.4

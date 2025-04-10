@@ -110,35 +110,49 @@ function setupEventListeners() {
 
 // 更新连接状态
 function updateConnectionStatus() {
-    chrome.runtime.sendMessage({ action: 'get_status' }, (response) => {
+    chrome.runtime.sendMessage({ action: 'getStatus' }, (response) => {
         if (!response || !response.success) return;
 
         const status = response.status.status;
 
         // 更新状态指示器
         statusDot.className = 'status-dot ' + status;
+        console.log("status:", status, response)
 
         // 更新状态文本
         switch (status) {
             case 'connected':
                 statusText.textContent = '已连接';
+                // 连接成功后，更新UI状态
+                connectBtn.disabled = true;
+                disconnectBtn.disabled = false;
+                statusDot.className = 'status-dot connected';
                 break;
             case 'connecting':
                 statusText.textContent = '连接中...';
+                // 连接中，两个按钮都禁用
+                connectBtn.disabled = true;
+                disconnectBtn.disabled = true;
                 break;
             case 'disconnected':
                 statusText.textContent = '未连接';
+                // 断开连接后，更新UI状态
+                connectBtn.disabled = false;
+                disconnectBtn.disabled = true;
+                statusDot.className = 'status-dot disconnected';
                 break;
             case 'error':
                 statusText.textContent = '连接错误';
+                // 连接错误时，允许重新连接
+                connectBtn.disabled = false;
+                disconnectBtn.disabled = true;
                 break;
             default:
                 statusText.textContent = '未知状态';
+                // 未知状态时的默认UI
+                connectBtn.disabled = false;
+                disconnectBtn.disabled = true;
         }
-
-        // 更新按钮状态
-        connectBtn.disabled = status === 'connected' || status === 'connecting';
-        disconnectBtn.disabled = status === 'disconnected';
 
         // 更新服务器信息
         if (response.status.serverUrl) {

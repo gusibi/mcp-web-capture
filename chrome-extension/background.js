@@ -13,6 +13,7 @@ const contentExtractor = new ContentExtractor();
 
 // 连接状态
 let connectionStatus = {
+    status: 'disconnected', // 添加status属性，初始值为'disconnected'
     connected: false,
     serverUrl: null,
     lastConnected: null,
@@ -21,17 +22,22 @@ let connectionStatus = {
 
 // 初始化后台脚本
 function init() {
+    console.log('background.js->初始化开始');
     // 监听来自弹出窗口和选项页面的消息
     chrome.runtime.onMessage.addListener(handleMessage);
+    console.log('background.js->已注册chrome.runtime.onMessage监听器');
 
     // 监听WebSocket连接状态变化
     websocketManager.on('status_change', handleConnectionStatusChange);
+    console.log('background.js->已注册WebSocket status_change事件监听器');
 
     // 监听WebSocket消息
     websocketManager.on('message', handleWebSocketMessage);
+    console.log('background.js->已注册WebSocket message事件监听器');
 
     // 加载设置并自动连接（如果启用）
     loadSettingsAndConnect();
+    console.log('background.js->初始化完成');
 }
 
 // 加载设置并自动连接
@@ -46,7 +52,7 @@ function loadSettingsAndConnect() {
 
 // 处理消息
 function handleMessage(message, sender, sendResponse) {
-    console.log('收到消息:', message);
+    console.log('handleMessage-->收到消息:', message);
 
     switch (message.action) {
         case 'connect':
@@ -69,7 +75,7 @@ function handleMessage(message, sender, sendResponse) {
             };
             console.log('状态检查响应:', response);
             sendResponse(response);
-            break;
+            return true; // 异步响应
 
         case 'captureTab':
             captureCurrentTab(message.options)
@@ -122,6 +128,7 @@ function handleConnectionStatusChange(status) {
     if (!status) status = {};
 
     connectionStatus = {
+        status: status.status || (status.connected ? 'connected' : 'disconnected'), // 确保status属性存在
         connected: status.connected || status.status === 'connected',
         serverUrl: status.serverUrl || websocketManager.serverUrl,
         lastConnected: (status.connected || status.status === 'connected') ? new Date().toISOString() : connectionStatus.lastConnected,
@@ -144,23 +151,40 @@ function handleConnectionStatusChange(status) {
 
 // 处理接收到的WebSocket消息
 async function handleWebSocketMessage(message) {
-    console.log('收到WebSocket消息:', message);
+    console.log('handleWebSocketMessage -> 消息类型:', typeof message, '消息结构:', Object.keys(message));
+    console.log('handleWebSocketMessage -> 完整消息内容:', JSON.stringify(message));
 
     try {
         // 根据消息格式处理
         let data;
 
         if (message && message.data) {
+            console.log('handleWebSocketMessage -> 消息包含data属性:', typeof message.data);
+            console.log('handleWebSocketMessage -> data内容:', JSON.stringify(message.data));
+
+            // 检查是否是从websocket.js传递过来的包装消息
+            if (message.data && message.data.command && message.originalEvent) {
+                console.log('handleWebSocketMessage -> 检测到websocket.js包装的command消息');
+                data = message.data; // 直接使用包装中的data字段
+            }
             // 如果消息是对象且包含data属性
-            if (typeof message.data === 'string') {
+            else if (typeof message.data === 'string') {
                 // 如果data是字符串，尝试解析JSON
-                data = JSON.parse(message.data);
+                console.log('handleWebSocketMessage -> data是字符串，尝试解析JSON');
+                try {
+                    data = JSON.parse(message.data);
+                } catch (error) {
+                    console.error('解析JSON失败:', error);
+                    data = message.data; // 如果解析失败，使用原始字符串
+                }
             } else if (typeof message.data === 'object') {
                 // 如果data已经是对象，直接使用
+                console.log('handleWebSocketMessage -> data是对象，直接使用');
                 data = message.data;
             }
         } else if (typeof message === 'object') {
             // 消息本身可能就是数据
+            console.log('handleWebSocketMessage -> 消息本身作为数据使用');
             data = message;
         }
 
@@ -170,22 +194,67 @@ async function handleWebSocketMessage(message) {
             return;
         }
 
-        // 处理不同类型的指令
-        switch (data.command) {
-            case 'capture':
+        console.log('handleWebSocketMessage -> 处理后的data:', data);
+
+        // 检查消息来源是否为ws_command
+        if (data.source === 'ws_command') {
+            console.log('收到来自websocket_send_command的消息:', data);
+            // 处理来自websocket_send_command的消息
+            if (data.action === 'open' && data.url) {
                 await handleCaptureCommand(data);
-                break;
+                return;
+            } else if (data.action === 'screenshot' || data.command === 'screenshot') {
+                console.log('处理screenshot命令:', data);
+                await handleCaptureCommand({
+                    ...data,
+                    id: data.message_id, // 确保ID字段一致
+                    command: 'capture' // 使用现有的capture处理逻辑
+                });
+                return;
+            }
+            // 返回默认消息回服务器
+            console.log('handleWebSocketMessage -> 返回默认消息回服务器---->>>>>');
+            websocketManager.sendMessage({
+                type: 'response',
+                id: data.message_id,
+                success: true,
+                error: false,
+                content: data // 将原始消息内容一并返回
+            });
+            return;
+        }
 
-            case 'extract':
-                await handleExtractCommand(data);
-                break;
+        // 处理标准指令格式的消息
+        const command = data.command;
+        console.log('handleWebSocketMessage -> 检查command字段:', command);
+        if (command) {
+            console.log('handleWebSocketMessage -> 处理command:', command);
+            switch (command) {
+                case 'capture':
+                    console.log('handleWebSocketMessage -> 执行capture命令');
+                    await handleCaptureCommand(data);
+                    break;
 
-            case 'navigate':
-                await handleNavigateCommand(data);
-                break;
+                case 'extract':
+                    console.log('handleWebSocketMessage -> 执行extract命令');
+                    await handleExtractCommand(data);
+                    break;
 
-            default:
-                console.warn('未知指令:', data.command);
+                case 'navigate':
+                    console.log('handleWebSocketMessage -> 执行navigate命令');
+                    await handleNavigateCommand(data);
+                    break;
+
+                case 'open':
+                    console.log('handleWebSocketMessage -> 执行open命令');
+                    await handleOpenCommand(data);
+                    break;
+
+                default:
+                    console.warn('未知指令:', command);
+            }
+        } else {
+            console.warn('消息中没有command字段:', data);
         }
     } catch (error) {
         console.error('处理WebSocket消息失败:', error);
@@ -288,6 +357,35 @@ async function handleNavigateCommand(data) {
             type: 'response',
             id: data.id,
             command: 'navigate',
+            success: false,
+            error: error.message
+        });
+    }
+}
+
+// 处理打开URL指令 (来自websocket_send_command)
+async function handleOpenCommand(data) {
+    try {
+        if (!data.url) {
+            throw new Error('URL不能为空');
+        }
+
+        await navigateToUrl(data.url);
+
+        // 发送结果回服务器
+        websocketManager.sendMessage({
+            type: 'response',
+            id: data.id || 'open_' + Date.now(), // 确保有ID，即使原始消息没有提供
+            command: 'open',
+            success: true,
+            url: data.url
+        });
+    } catch (error) {
+        // 发送错误回服务器
+        websocketManager.sendMessage({
+            type: 'response',
+            id: data.id || 'open_' + Date.now(),
+            command: 'open',
             success: false,
             error: error.message
         });
