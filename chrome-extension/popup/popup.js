@@ -47,8 +47,15 @@ function setupEventListeners() {
     // 连接按钮
     connectBtn.addEventListener('click', () => {
         chrome.runtime.sendMessage({ action: 'connect' }, (response) => {
+            console.log("response----->:", response)
             if (response && response.success) {
+                // 连接成功，更新状态
                 updateConnectionStatus();
+            } else {
+                // 连接失败，显示错误消息
+                const errorMsg = response && response.error ? response.error : '连接服务器失败，请检查API密钥和服务器配置';
+                showError(errorMsg);
+                updateConnectionStatus(); // 更新状态显示
             }
         });
     });
@@ -117,7 +124,6 @@ function updateConnectionStatus() {
 
         // 更新状态指示器
         statusDot.className = 'status-dot ' + status;
-        console.log("status:", status, response)
 
         // 更新状态文本
         switch (status) {
@@ -127,6 +133,8 @@ function updateConnectionStatus() {
                 connectBtn.disabled = true;
                 disconnectBtn.disabled = false;
                 statusDot.className = 'status-dot connected';
+                // 连接成功后，更新结果预览区域
+                updateResultPreviewForConnection(true);
                 break;
             case 'connecting':
                 statusText.textContent = '连接中...';
@@ -140,18 +148,24 @@ function updateConnectionStatus() {
                 connectBtn.disabled = false;
                 disconnectBtn.disabled = true;
                 statusDot.className = 'status-dot disconnected';
+                // 断开连接后，更新结果预览区域
+                updateResultPreviewForConnection(false);
                 break;
             case 'error':
                 statusText.textContent = '连接错误';
                 // 连接错误时，允许重新连接
                 connectBtn.disabled = false;
                 disconnectBtn.disabled = true;
+                // 连接错误时，更新结果预览区域
+                updateResultPreviewForConnection(false);
                 break;
             default:
                 statusText.textContent = '未知状态';
                 // 未知状态时的默认UI
                 connectBtn.disabled = false;
                 disconnectBtn.disabled = true;
+                // 未知状态时，更新结果预览区域
+                updateResultPreviewForConnection(false);
         }
 
         // 更新服务器信息
@@ -592,6 +606,31 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
     return true;
 });
+
+// 根据连接状态更新结果预览区域
+function updateResultPreviewForConnection(isConnected) {
+    if (isConnected) {
+        // 连接成功时，显示连接成功的消息
+        previewContent.innerHTML = `<div class="success-message">服务器连接成功！现在可以进行页面截图和内容提取操作。</div>`;
+        resultPreview.style.display = 'block';
+
+        // 3秒后自动关闭成功提示
+        setTimeout(() => {
+            // 只有当预览内容仍然是连接成功消息时才关闭
+            if (previewContent.querySelector('.success-message') &&
+                previewContent.querySelector('.success-message').textContent.includes('服务器连接成功')) {
+                resultPreview.style.display = 'none';
+            }
+        }, 3000);
+    } else {
+        // 未连接时，如果当前显示的是连接成功消息，则隐藏结果预览
+        if (previewContent.querySelector('.success-message') &&
+            previewContent.querySelector('.success-message').textContent.includes('服务器连接成功')) {
+            resultPreview.style.display = 'none';
+        }
+        // 如果有其他内容显示，则保持不变
+    }
+}
 
 // 添加CSS样式
 function addStyles() {

@@ -22,27 +22,39 @@ let connectionStatus = {
 
 // 初始化后台脚本
 function init() {
-    console.log('background.js->初始化开始');
+
     // 监听来自弹出窗口和选项页面的消息
     chrome.runtime.onMessage.addListener(handleMessage);
-    console.log('background.js->已注册chrome.runtime.onMessage监听器');
+
 
     // 监听WebSocket连接状态变化
     websocketManager.on('status_change', handleConnectionStatusChange);
-    console.log('background.js->已注册WebSocket status_change事件监听器');
+
 
     // 监听WebSocket消息
     websocketManager.on('message', handleWebSocketMessage);
-    console.log('background.js->已注册WebSocket message事件监听器');
+
 
     // 加载设置并自动连接（如果启用）
     loadSettingsAndConnect();
-    console.log('background.js->初始化完成');
+
 }
 
 // 加载设置并自动连接
 function loadSettingsAndConnect() {
     chrome.storage.sync.get(['serverUrl', 'apiKey', 'autoConnect'], (result) => {
+        // 确保WebSocketManager实例有最新的apiKey
+        if (result.apiKey) {
+            websocketManager.apiKey = result.apiKey;
+
+        }
+
+        // 确保WebSocketManager实例有最新的serverUrl
+        if (result.serverUrl) {
+            websocketManager.serverUrl = result.serverUrl;
+
+        }
+
         if (result.autoConnect && result.serverUrl) {
             // 自动连接
             connectToServer();
@@ -52,10 +64,11 @@ function loadSettingsAndConnect() {
 
 // 处理消息
 function handleMessage(message, sender, sendResponse) {
-    console.log('handleMessage-->收到消息:', message);
+
 
     switch (message.action) {
         case 'connect':
+
             connectToServer()
                 .then(status => sendResponse(status))
                 .catch(error => sendResponse({ success: false, error: error.message }));
@@ -68,12 +81,12 @@ function handleMessage(message, sender, sendResponse) {
             return true; // 异步响应
 
         case 'getStatus':
-            console.log('状态检查请求:', message);
+
             const response = {
                 success: true,
                 status: connectionStatus
             };
-            console.log('状态检查响应:', response);
+
             sendResponse(response);
             return true; // 异步响应
 
@@ -90,8 +103,9 @@ function handleMessage(message, sender, sendResponse) {
             return true; // 异步响应
 
         case 'settings_updated':
-            // 设置已更新，重新加载
-            loadSettingsAndConnect();
+            // 设置已更新，直接调用WebSocketManager的updateConfig方法
+            // 这样可以确保当配置被清空时，WebSocket连接会立即断开
+            websocketManager.updateConfig();
             sendResponse({ success: true });
             break;
 
@@ -104,7 +118,19 @@ function handleMessage(message, sender, sendResponse) {
 async function connectToServer() {
     try {
         await websocketManager.connect();
-        return { success: true };
+
+        // 获取实际的连接状态
+        const status = websocketManager.getStatus();
+
+        // 检查连接状态
+        if (status.status === 'connected') {
+            return { success: true };
+        } else if (status.status === 'error') {
+            return { success: false, error: '连接失败: ' + (status.errorMessage || '未知错误') };
+        } else {
+            // 如果状态不是connected，但也没有明确的错误
+            return { success: false, error: '连接状态: ' + status.status };
+        }
     } catch (error) {
         console.error('连接服务器失败:', error);
         return { success: false, error: error.message };
@@ -142,7 +168,7 @@ function handleConnectionStatusChange(status) {
             status: connectionStatus
         }).catch(() => {
             // 弹出窗口可能未打开，忽略错误
-            console.log('无法发送状态更新，弹出窗口可能未打开');
+
         });
     } catch (error) {
         console.error('发送状态更新消息失败:', error);
@@ -151,26 +177,26 @@ function handleConnectionStatusChange(status) {
 
 // 处理接收到的WebSocket消息
 async function handleWebSocketMessage(message) {
-    console.log('handleWebSocketMessage -> 消息类型:', typeof message, '消息结构:', Object.keys(message));
-    console.log('handleWebSocketMessage -> 完整消息内容:', JSON.stringify(message));
+
+
 
     try {
         // 根据消息格式处理
         let data;
 
         if (message && message.data) {
-            console.log('handleWebSocketMessage -> 消息包含data属性:', typeof message.data);
-            console.log('handleWebSocketMessage -> data内容:', JSON.stringify(message.data));
+
+
 
             // 检查是否是从websocket.js传递过来的包装消息
             if (message.data && message.data.command && message.originalEvent) {
-                console.log('handleWebSocketMessage -> 检测到websocket.js包装的command消息');
+
                 data = message.data; // 直接使用包装中的data字段
             }
             // 如果消息是对象且包含data属性
             else if (typeof message.data === 'string') {
                 // 如果data是字符串，尝试解析JSON
-                console.log('handleWebSocketMessage -> data是字符串，尝试解析JSON');
+
                 try {
                     data = JSON.parse(message.data);
                 } catch (error) {

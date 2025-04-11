@@ -60,15 +60,11 @@ function loadSettings() {
         'extractImages',
         'extractLinks'
     ], (result) => {
-        // 设置服务器URL
-        if (result.serverUrl) {
-            serverUrlInput.value = result.serverUrl;
-        }
+        // 设置服务器URL - 无论是否为空字符串都设置值
+        serverUrlInput.value = result.serverUrl || '';
 
-        // 设置API密钥
-        if (result.apiKey) {
-            apiKeyInput.value = result.apiKey;
-        }
+        // 设置API密钥 - 无论是否为空字符串都设置值
+        apiKeyInput.value = result.apiKey || '';
 
         // 设置自动连接
         autoConnectCheckbox.checked = result.autoConnect === true;
@@ -137,9 +133,11 @@ async function saveSettings() {
 
         // 保存设置到存储
         await new Promise((resolve, reject) => {
+            // 即使字段为空也会保存，确保覆盖旧值
+            console.log('saving settings', serverUrlInput.value, apiKeyInput.value, autoConnectCheckbox.checked, imageFormatSelect.value, parseInt(imageQualityInput.value), extractImagesCheckbox.checked, extractLinksCheckbox.checked)
             chrome.storage.sync.set({
-                serverUrl: serverUrlInput.value,
-                apiKey: apiKeyInput.value,
+                serverUrl: serverUrlInput.value, // 即使为空字符串也会保存
+                apiKey: apiKeyInput.value, // 即使为空字符串也会保存
                 autoConnect: autoConnectCheckbox.checked,
                 imageFormat: imageFormatSelect.value,
                 imageQuality: parseInt(imageQualityInput.value),
@@ -184,8 +182,17 @@ function resetSettings() {
     // 更新质量值显示
     updateQualityValue();
 
-    // 保存重置后的设置
-    saveSettings();
+    // 完全清除存储中的所有设置
+    chrome.storage.sync.clear(() => {
+        // 保存默认设置
+        saveSettings();
+
+        // 通知后台脚本设置已重置
+        chrome.runtime.sendMessage({ action: 'settings_updated' });
+
+        // 显示重置成功通知
+        showNotification('设置已重置为默认值');
+    });
 }
 
 // 显示通知

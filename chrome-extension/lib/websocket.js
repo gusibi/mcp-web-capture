@@ -1,13 +1,15 @@
 /**
  * WebSocket 连接管理模块
  * 负责与远程服务建立持久性 WebSocket 连接，处理消息收发和连接状态管理
+ * 参考Python后端实现，使用apiKey作为连接ID，确保单一连接实例
  */
 
 class WebSocketManager {
     constructor() {
         this.socket = null;
         this.serverUrl = null;
-        this.apiKey = null;
+        this.apiKey = null; // 用作连接ID
+        this.connId = null; // 存储连接ID
         this.reconnectAttempts = 0;
         this.maxReconnectAttempts = 5;
         this.reconnectInterval = 3000; // 3秒
@@ -25,24 +27,48 @@ class WebSocketManager {
         chrome.storage.sync.get(['serverUrl', 'apiKey'], (result) => {
             if (result.serverUrl) {
                 this.serverUrl = result.serverUrl;
+            } else {
+                this.serverUrl = null;
             }
             if (result.apiKey) {
                 this.apiKey = result.apiKey;
+            } else {
+                this.apiKey = null;
             }
 
             // 如果有配置，自动连接
-            if (this.serverUrl) {
+            if (this.serverUrl && this.apiKey) {
                 this.connect();
+            } else if (this.socket) {
+                // 如果配置被清空但仍有连接，断开连接
+                console.log('配置已清空，断开WebSocket连接');
+                this.disconnect();
             }
         });
     }
 
     /**
+     * 更新WebSocket配置
+     * 当设置页面保存新配置时调用此方法
+     */
+    updateConfig() {
+        console.log('更新WebSocket配置');
+        // 断开现有连接
+        if (this.socket) {
+            this.disconnect();
+        }
+        // 重新加载配置
+        this.loadConfig();
+    }
+
+    /**
      * 建立WebSocket连接
+     * 确保只创建一个WebSocket连接实例，使用apiKey作为连接ID
      */
     connect() {
+        // 检查是否已有活跃连接，避免创建多个连接
         if (this.socket && (this.socket.readyState === WebSocket.OPEN || this.socket.readyState === WebSocket.CONNECTING)) {
-            console.log('WebSocket已连接或正在连接中');
+
             return;
         }
 
@@ -51,18 +77,33 @@ class WebSocketManager {
             return;
         }
 
+        if (!this.apiKey) {
+            this.updateStatus('error', '未配置API密钥(连接ID)');
+            return;
+        }
+
+        // 设置连接ID为apiKey
+        this.connId = this.apiKey;
+
+
         this.updateStatus('connecting');
 
         try {
-            // 创建WebSocket连接
-            this.socket = new WebSocket(this.serverUrl);
+            // 创建WebSocket连接，将conn_id作为查询参数附加到URL
+            const url = new URL(this.serverUrl);
+            url.searchParams.append('conn_id', this.connId);
+
+            this.socket = new WebSocket(url.toString());
+
 
             // 设置事件处理器
             this.socket.onopen = this.handleOpen.bind(this);
             this.socket.onmessage = this.handleMessage.bind(this);
             this.socket.onclose = this.handleClose.bind(this);
             this.socket.onerror = this.handleError.bind(this);
+
         } catch (error) {
+            console.error('------------->创建WebSocket连接时发生错误:', error);
             this.updateStatus('error', error.message);
             this.scheduleReconnect();
         }
@@ -70,18 +111,21 @@ class WebSocketManager {
 
     /**
      * 处理WebSocket连接成功事件
+     * 发送带有连接ID的认证消息
      */
     handleOpen(event) {
-        console.log('WebSocket连接已建立: ', this.serverUrl);
+
         this.updateStatus('connected');
         this.reconnectAttempts = 0;
 
-        // 发送认证消息
+        // 发送认证消息，包含连接ID
         if (this.apiKey) {
             this.sendMessage({
                 type: 'auth',
-                apiKey: this.apiKey
+                apiKey: this.apiKey,
+                conn_id: this.connId // 发送连接ID给服务器
             });
+
         }
 
         // 触发连接事件
@@ -91,6 +135,7 @@ class WebSocketManager {
     /**
      * 处理接收到的WebSocket消息
      * 增强Service Worker环境下的消息处理能力
+     * 处理连接ID确认和认证响应
      */
     handleMessage(event) {
         try {
@@ -111,19 +156,26 @@ class WebSocketManager {
                 return;
             }
 
-            console.log('WebSocketManager.handleMessage->收到消息:', message);
+
+
+            // 处理认证响应，检查是否包含连接ID确认
+            if (message && typeof message === 'object' && message.type === 'auth_response') {
+
+                this.handleAuthResponse(message);
+                return;
+            }
 
             // 根据消息类型处理
             if (message && typeof message === 'object' && message.command) {
                 // 首先检查是否有command字段，与background.js保持一致
-                console.log('WebSocketManager.handleMessage->发现command字段:', message.command);
+
                 // 直接传递消息，让background.js处理command
                 this.emit('message', { data: message, originalEvent: event });
-                console.log('WebSocketManager.handleMessage->已发送message事件:', message);
+
                 return;
             } else {
                 // 处理非对象类型的消息
-                console.log('WebSocketManager.handleMessage->发送非对象message事件:', { data: message, isNotObject: true });
+
                 this.emit('message', { data: message, isNotObject: true });
             }
         } catch (error) {
@@ -135,11 +187,18 @@ class WebSocketManager {
 
     /**
      * 处理认证响应
+     * 处理服务器返回的连接ID确认
      */
     handleAuthResponse(message) {
         if (message.success) {
-            console.log('认证成功');
-            this.emit('auth_success');
+            // 如果服务器返回了连接ID，更新本地存储的连接ID
+            if (message.conn_id) {
+                this.connId = message.conn_id;
+
+            } else {
+
+            }
+            this.emit('auth_success', { connId: this.connId });
         } else {
             console.error('认证失败:', message.error);
             this.updateStatus('error', '认证失败: ' + message.error);
@@ -148,24 +207,108 @@ class WebSocketManager {
     }
 
     /**
-     * 处理WebSocket连接关闭事件
-     */
-    handleClose(event) {
-        console.log(`WebSocket连接已关闭: ${event.code} ${event.reason}`);
-        this.updateStatus('disconnected');
-        this.emit('disconnected', event);
+ * 检测是否为403错误的辅助方法
+ * @param {Event|CloseEvent|Error} event - WebSocket错误或关闭事件
+ * @returns {boolean} 是否为403错误
+ */
+    detect403Error(event) {
+        const reason = event?.reason || '';
+        const message = event?.message || '';
+        const url = event?.target?.url || this.serverUrl || '';
 
-        // 尝试重新连接
-        // this.scheduleReconnect();
+        // 1. 检查明显的403关键字
+        if (reason.includes('403') || message.includes('403') || reason.includes('Forbidden') || message.includes('Forbidden')) {
+            return true;
+        }
+
+        // 2. 特殊错误码，可能是403或URL错误
+        if (event.code === 1006 || event.code === 1015) {
+            // TLS失败常常是 URL 配错，或服务器拒绝连接
+            if (url && (url.includes('wrong') || url.includes('invalid') || url.includes('localhost'))) {
+                console.warn('WebSocket URL 可能配置错误:', url);
+                return true; // 假定为连接失败或伪403
+            }
+
+            // fallback: 看 errorMessage 中有没有提示
+            if (this.errorMessage && this.errorMessage.includes('403')) {
+                return true;
+            }
+
+            // TLS 失败的场景（一般是 serverUrl 写错、证书无效）
+            if (event.code === 1015 && url.startsWith('wss://')) {
+                console.warn('TLS 握手失败，可能为伪403或无效 serverUrl');
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+
+    /**
+ * 处理WebSocket关闭事件
+ */
+    handleClose(event) {
+        console.log(`WebSocket连接已关闭: 代码=${event.code}, 原因=${event.reason || '无原因'}`);
+
+        // 检查是否可能为403错误
+        const is403Error = this.detect403Error(event);
+
+        if (is403Error) {
+            const errorMsg = '服务器拒绝连接 (403 Forbidden)';
+            console.error('WebSocket 403错误:', errorMsg);
+            this.updateStatus('error', errorMsg);
+            this.emit('error', { code: event.code, message: errorMsg, is403Error: true });
+            this.reconnectAttempts = this.maxReconnectAttempts; // 阻止重连
+        } else if (event.code === 1006 || event.code === 1015) {
+            // 异常关闭（1006: 异常终止，1015: TLS失败）
+            const errorMsg = event.reason || `连接异常关闭 (代码: ${event.code})`;
+            console.error('WebSocket异常关闭:', errorMsg);
+            this.updateStatus('error', errorMsg);
+            this.emit('error', { code: event.code, message: errorMsg });
+            this.scheduleReconnect();
+        } else {
+            // 正常关闭
+            console.log('WebSocket正常关闭');
+            this.updateStatus('disconnected');
+            this.emit('disconnected', event);
+        }
     }
 
     /**
-     * 处理WebSocket错误事件
-     */
+ * 处理WebSocket错误事件
+ */
     handleError(error) {
         console.error('WebSocket错误:', error);
-        this.updateStatus('error', error.message || '连接错误');
-        this.emit('error', error);
+
+        // 默认错误信息
+        let errorMessage = '连接错误';
+        let is403Error = false;
+
+        // 检测可能的403错误
+        is403Error = this.detect403Error(error);
+
+        if (is403Error) {
+            errorMessage = '服务器拒绝连接 (403 Forbidden)';
+            console.error('WebSocket 403错误:', errorMessage);
+        } else if (error.message) {
+            errorMessage = error.message;
+        } else if (error.target && error.target.url) {
+            errorMessage = `无法连接到 ${error.target.url}`;
+        }
+
+        // 更新状态并触发错误事件
+        this.updateStatus('error', errorMessage);
+        this.emit('error', { message: errorMessage, originalError: error, is403Error });
+
+        // 根据错误类型决定是否重连
+        if (is403Error) {
+            console.log('403错误，停止重连');
+            this.reconnectAttempts = this.maxReconnectAttempts; // 阻止重连
+        } else {
+            console.log('非403错误，尝试重连');
+            this.scheduleReconnect();
+        }
     }
 
     /**
@@ -187,12 +330,16 @@ class WebSocketManager {
 
     /**
      * 断开WebSocket连接
+     * 清除连接ID
      */
     disconnect() {
         if (this.socket) {
+            console.log(`断开WebSocket连接，连接ID: ${this.connId}`);
             this.socket.close();
             this.socket = null;
         }
+        // 断开连接时清除连接ID，但保留apiKey以便重新连接
+        this.connId = null;
         this.updateStatus('disconnected');
     }
 
@@ -221,13 +368,15 @@ class WebSocketManager {
      */
     updateStatus(status, errorMessage = null) {
         this.connectionStatus = status;
+        this.errorMessage = errorMessage; // 保存错误消息到实例属性
 
         // 构建状态对象，确保包含所有必要信息
         const statusObj = {
             status,
             errorMessage,
             connected: status === 'connected',
-            serverUrl: this.serverUrl
+            serverUrl: this.serverUrl,
+            connId: this.connId // 添加连接ID到状态对象
         };
 
         // 触发状态变更事件
@@ -249,11 +398,15 @@ class WebSocketManager {
 
     /**
      * 获取当前连接状态
+     * 包含连接ID信息和错误消息
      */
     getStatus() {
         return {
             status: this.connectionStatus,
-            serverUrl: this.serverUrl
+            serverUrl: this.serverUrl,
+            connId: this.connId,
+            apiKey: this.apiKey,
+            errorMessage: this.errorMessage // 添加错误消息属性
         };
     }
 
