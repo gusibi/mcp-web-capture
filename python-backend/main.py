@@ -33,20 +33,29 @@ async def list_items(skip: int = 0, limit: int = 10):
     """
     return [1,2,3,4,5]
 
+def get_browser_conn_id(conn_id: str) -> str:
+    """
+    获取与指定 conn_id 对应的浏览器连接 ID
+    """
+    conn_id = "ws_browser:%s" % conn_id
+    return conn_id
+
 @app.websocket("/ws_browser")
 async def websocket_browser(websocket: WebSocket,conn_id: Optional[str] = None ):
     # 连接时传入可选的 conn_id
+    conn_id = get_browser_conn_id(conn_id)
     conn_id = await ws_manager.connect(websocket, conn_id)
     try:
         while True:
             data = await websocket.receive_json()  # 接收 Postman 的消息
-            print(f"ws_browser [{conn_id}] 收到消息:", data)
+            print(f"ws_browser [{conn_id}] 收到消息: ---->>>>>>", data)
 
             # 检查是否是某个请求的响应（含 message_id）
             if "message_id" in data:
                 await ws_manager.handle_response(data)  # 传递给 send_message
             else:
                 # 其他消息（如心跳包）可以在这里处理
+                print("--------", data)
                 pass
     except WebSocketDisconnect:
         ws_manager.disconnect(conn_id)
@@ -68,15 +77,16 @@ async def websocket_send_command(websocket: WebSocket,conn_id: Optional[str] = N
                 # 构造消息并发送给浏览器
                 message = {
                     "source": "ws_command",
-                    "action": data["command"],
+                    "action": data["action"],
                     "command": data["command"],
-                    "url": data["url"]
+                    "url": data["url"],
+                    "message_id": data["message_id"]
                 }
                 print(f"websocket_send_command[{conn_id}] -->发送消息:", message)
                 
                 try:
                     # 发送消息到浏览器并等待响应
-                    response = await ws_manager.send_message(message)
+                    response = await ws_manager.send_message(message, target_conn_id=get_browser_conn_id(conn_id))
                     print(f"收到浏览器响应[{conn_id}] :", response)
                     
                     # 将响应发送回客户端

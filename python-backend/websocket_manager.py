@@ -44,6 +44,9 @@ class WebSocketManager:
         """
         if not self.active_connections:
             raise ConnectionError("没有活动的 WebSocket 连接")
+        print("正在发送消息...")  # 调试
+        print("target_conn_id:", target_conn_id)
+        print("message:", message)
 
         # 如果没有指定 conn_id，默认选择第一个连接
         websocket = (
@@ -55,15 +58,20 @@ class WebSocketManager:
         if not websocket:
             raise ConnectionError(f"未找到目标连接: {target_conn_id}")
 
-        message_id = str(uuid.uuid4())
-        message["message_id"] = message_id  # 加入唯一消息 ID
+        if not message.get("message_id", ""):
+            # 如果消息中未包含 message_id, 则生产一个
+            message_id = str(uuid.uuid4())
+            message["message_id"] = message_id  # 加入唯一消息 ID
+        else:
+            message_id = message["message_id"]
 
+        print("new message:", message)
         future = asyncio.get_event_loop().create_future()
         self.pending_responses[message_id] = future
 
         try:
             await websocket.send_json(message)
-            response = await asyncio.wait_for(future, timeout=30.0)
+            response = await asyncio.wait_for(future, timeout=3.0)
             return response
         except asyncio.TimeoutError:
             raise ConnectionError("等待响应超时")

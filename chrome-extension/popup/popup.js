@@ -31,6 +31,13 @@ function initPopup() {
 
     // 设置事件监听器
     setupEventListeners();
+
+    // 监听连接状态变化消息
+    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+        if (message.action === 'connectionStatusChanged') {
+            updateConnectionUI(message.status);
+        }
+    });
 }
 
 // 加载配置
@@ -115,63 +122,65 @@ function setupEventListeners() {
     });
 }
 
+// 更新连接UI状态
+function updateConnectionUI(status) {
+    // 更新状态指示器
+    statusDot.className = 'status-dot ' + status.status;
+
+    // 更新状态文本
+    switch (status.status) {
+        case 'connected':
+            statusText.textContent = '已连接';
+            // 连接成功后，更新UI状态
+            connectBtn.disabled = true;
+            disconnectBtn.disabled = false;
+            statusDot.className = 'status-dot connected';
+            // 连接成功后，更新结果预览区域
+            updateResultPreviewForConnection(true);
+            break;
+        case 'connecting':
+            statusText.textContent = '连接中...';
+            // 连接中，两个按钮都禁用
+            connectBtn.disabled = true;
+            disconnectBtn.disabled = true;
+            break;
+        case 'disconnected':
+            statusText.textContent = '未连接';
+            // 断开连接后，更新UI状态
+            connectBtn.disabled = false;
+            disconnectBtn.disabled = true;
+            statusDot.className = 'status-dot disconnected';
+            // 断开连接后，更新结果预览区域
+            updateResultPreviewForConnection(false);
+            break;
+        case 'error':
+            statusText.textContent = status.lastError || '连接错误';
+            // 连接错误时，允许重新连接
+            connectBtn.disabled = false;
+            disconnectBtn.disabled = true;
+            // 连接错误时，更新结果预览区域
+            updateResultPreviewForConnection(false);
+            break;
+        default:
+            statusText.textContent = '未知状态';
+            // 未知状态时的默认UI
+            connectBtn.disabled = false;
+            disconnectBtn.disabled = true;
+            // 未知状态时，更新结果预览区域
+            updateResultPreviewForConnection(false);
+    }
+
+    // 更新服务器信息
+    if (status.serverUrl) {
+        serverInfo.textContent = `服务器: ${status.serverUrl}`;
+    }
+}
+
 // 更新连接状态
 function updateConnectionStatus() {
     chrome.runtime.sendMessage({ action: 'getStatus' }, (response) => {
         if (!response || !response.success) return;
-
-        const status = response.status.status;
-
-        // 更新状态指示器
-        statusDot.className = 'status-dot ' + status;
-
-        // 更新状态文本
-        switch (status) {
-            case 'connected':
-                statusText.textContent = '已连接';
-                // 连接成功后，更新UI状态
-                connectBtn.disabled = true;
-                disconnectBtn.disabled = false;
-                statusDot.className = 'status-dot connected';
-                // 连接成功后，更新结果预览区域
-                updateResultPreviewForConnection(true);
-                break;
-            case 'connecting':
-                statusText.textContent = '连接中...';
-                // 连接中，两个按钮都禁用
-                connectBtn.disabled = true;
-                disconnectBtn.disabled = true;
-                break;
-            case 'disconnected':
-                statusText.textContent = '未连接';
-                // 断开连接后，更新UI状态
-                connectBtn.disabled = false;
-                disconnectBtn.disabled = true;
-                statusDot.className = 'status-dot disconnected';
-                // 断开连接后，更新结果预览区域
-                updateResultPreviewForConnection(false);
-                break;
-            case 'error':
-                statusText.textContent = '连接错误';
-                // 连接错误时，允许重新连接
-                connectBtn.disabled = false;
-                disconnectBtn.disabled = true;
-                // 连接错误时，更新结果预览区域
-                updateResultPreviewForConnection(false);
-                break;
-            default:
-                statusText.textContent = '未知状态';
-                // 未知状态时的默认UI
-                connectBtn.disabled = false;
-                disconnectBtn.disabled = true;
-                // 未知状态时，更新结果预览区域
-                updateResultPreviewForConnection(false);
-        }
-
-        // 更新服务器信息
-        if (response.status.serverUrl) {
-            serverInfo.textContent = `服务器: ${response.status.serverUrl}`;
-        }
+        updateConnectionUI(response.status);
     });
 }
 
