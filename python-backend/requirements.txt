@@ -5,3 +5,4 @@ starlette
 uvicorn
 fastapi
 fastapi-mcp==0.1.4
+pydantic-settings

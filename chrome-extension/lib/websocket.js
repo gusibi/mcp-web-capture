@@ -156,7 +156,7 @@ class WebSocketManager {
         this.emit('disconnected', event);
 
         // 尝试重新连接
-        this.scheduleReconnect();
+        // this.scheduleReconnect();
     }
 
     /**

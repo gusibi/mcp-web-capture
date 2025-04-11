@@ -1,7 +1,12 @@
+import os
+from typing import Dict, Optional  # 添加 Optional
+
 import uvicorn
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi_mcp import add_mcp_server
+
 from websocket_manager import WebSocketManager
+from config import settings
 
 """
 MCP 工具 - MCP Server
@@ -29,12 +34,13 @@ async def list_items(skip: int = 0, limit: int = 10):
     return [1,2,3,4,5]
 
 @app.websocket("/ws_browser")
-async def websocket_browser(websocket: WebSocket):
-    await ws_manager.connect(websocket)
+async def websocket_browser(websocket: WebSocket,conn_id: Optional[str] = None ):
+    # 连接时传入可选的 conn_id
+    conn_id = await ws_manager.connect(websocket, conn_id)
     try:
         while True:
             data = await websocket.receive_json()  # 接收 Postman 的消息
-            print("收到消息:", data)
+            print(f"ws_browser [{conn_id}] 收到消息:", data)
 
             # 检查是否是某个请求的响应（含 message_id）
             if "message_id" in data:
@@ -43,19 +49,19 @@ async def websocket_browser(websocket: WebSocket):
                 # 其他消息（如心跳包）可以在这里处理
                 pass
     except WebSocketDisconnect:
-        ws_manager.disconnect(websocket)
+        ws_manager.disconnect(conn_id)
     except Exception as e:
-        print("WebSocket 异常:", e)
-        ws_manager.disconnect(websocket)
+        print(f"ws_browser [{conn_id}] 异常:", e)
+        ws_manager.disconnect(conn_id)
 
 @app.websocket("/ws_command")
-async def websocket_send_command(websocket: WebSocket):
-    await ws_manager.connect(websocket)
+async def websocket_send_command(websocket: WebSocket,conn_id: Optional[str] = None):
+    conn_id = await ws_manager.connect(websocket, conn_id)
     try:
         while True:
             # 接收客户端发送的命令
             data = await websocket.receive_json()
-            print("websocket_send_command--->收到命令:", data)
+            print(f"ws_command [{conn_id}] 收到命令:", data)
             
             # 确保命令格式正确
             if "command" in data and "url" in data:
@@ -66,12 +72,12 @@ async def websocket_send_command(websocket: WebSocket):
                     "command": data["command"],
                     "url": data["url"]
                 }
-                print("websocket_send_command-->发送消息:", message)
+                print(f"websocket_send_command[{conn_id}] -->发送消息:", message)
                 
                 try:
                     # 发送消息到浏览器并等待响应
                     response = await ws_manager.send_message(message)
-                    print("收到浏览器响应:", response)
+                    print(f"收到浏览器响应[{conn_id}] :", response)
                     
                     # 将响应发送回客户端
                     await websocket.send_json(response)
@@ -83,10 +89,10 @@ async def websocket_send_command(websocket: WebSocket):
                 # 消息格式不正确
                 await websocket.send_json({"error": "无效的命令格式，需要包含 'command' 和 'url' 字段"})
     except WebSocketDisconnect:
-        ws_manager.disconnect(websocket)
+        ws_manager.disconnect(conn_id)
     except Exception as e:
-        print("WebSocket 命令异常:", e)
-        ws_manager.disconnect(websocket)
+        print(f"ws_command [{conn_id}] 异常:", e)
+        ws_manager.disconnect(conn_id)
 
 mcp_server = add_mcp_server(
     app,                                    # Your FastAPI app
@@ -97,8 +103,11 @@ mcp_server = add_mcp_server(
 )
 
 @mcp_server.tool()
-async def screenshot(url: str) -> str:
+async def screenshot(url: str ) -> str:
     """捕获指定 URL 的截图"""
+    conn_id = settings.connect_id
+    if conn_id is None:
+        return "未获取到 connect_id"
     try:
         # 使用command格式发送消息
         response = await ws_manager.send_message({
@@ -106,7 +115,9 @@ async def screenshot(url: str) -> str:
             "action": "screenshot", 
             "command": "screenshot", 
             "url": url
-            })
+            },
+            target_conn_id=conn_id  # 可指定目标连接
+            )
         print("截图响应:", response)
         return response.get("image_data", "")
     except ConnectionError as e:
@@ -130,4 +141,8 @@ if __name__ == "__main__":
     for route in app.routes:
         print(route.path, route.name)
 
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(
+        app,
+        host=settings.host,
+        port=settings.port
+    )
