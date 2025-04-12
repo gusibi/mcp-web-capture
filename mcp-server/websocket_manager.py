@@ -11,6 +11,11 @@ import uuid
 import asyncio
 
 from fastapi import WebSocket
+from config import settings
+
+from logger import get_logger
+
+logger = get_logger(__name__)
 
 class WebSocketManager:
     def __init__(self):
@@ -18,20 +23,20 @@ class WebSocketManager:
         self.pending_responses: Dict[str, asyncio.Future] = {}  # 存储待响应的 Future
 
     async def connect(self, websocket: WebSocket, conn_id: Optional[str] = None) -> str:
-        print("正在接受 WebSocket 连接...")  # 调试
+        logger.debug("正在接受 WebSocket 连接...")
         await websocket.accept()
         conn_id = conn_id or str(uuid.uuid4())  # 如果没有提供 conn_id，则生成一个
         self.active_connections[conn_id] = websocket
-        print(f"新连接建立，conn_id: {conn_id}")
-        print(f"当前连接数: {len(self.active_connections)}")  # 调试
+        logger.info(f"新连接建立，conn_id: {conn_id}")
+        logger.debug(f"当前连接数: {len(self.active_connections)}")
         return conn_id
 
     def disconnect(self, conn_id: str):
-        print("正在断开 WebSocket 连接..., 当前连接数：", len(self.active_connections))  # 调试
+        logger.debug(f"正在断开 WebSocket 连接..., 当前连接数: {len(self.active_connections)}")
         if conn_id in self.active_connections:
             self.active_connections.pop(conn_id)
-            print(f"连接断开，conn_id: {conn_id}")
-        print(f"已断开 WebSocket 连接，当前连接数: {len(self.active_connections)}")  # 调试
+            logger.info(f"连接断开，conn_id: {conn_id}")
+        logger.debug(f"已断开 WebSocket 连接，当前连接数: {len(self.active_connections)}")
 
     async def send_message(
         self, 
@@ -44,9 +49,9 @@ class WebSocketManager:
         """
         if not self.active_connections:
             raise ConnectionError("没有活动的 WebSocket 连接")
-        print("正在发送消息...")  # 调试
-        print("target_conn_id:", target_conn_id)
-        print("message:", message)
+        logger.debug("正在发送消息...")
+        logger.debug(f"target_conn_id: {target_conn_id}")
+        logger.debug(f"message: {message}")
 
         # 如果没有指定 conn_id，默认选择第一个连接
         websocket = (
@@ -65,13 +70,13 @@ class WebSocketManager:
         else:
             message_id = message["message_id"]
 
-        print("new message:", message)
+        logger.debug(f"new message: {message}")
         future = asyncio.get_event_loop().create_future()
         self.pending_responses[message_id] = future
 
         try:
             await websocket.send_json(message)
-            response = await asyncio.wait_for(future, timeout=3.0)
+            response = await asyncio.wait_for(future, timeout=settings.websocket_timeout)
             return response
         except asyncio.TimeoutError:
             raise ConnectionError("等待响应超时")
@@ -81,7 +86,7 @@ class WebSocketManager:
     async def handle_response(self, data: dict):
         """处理 Postman 返回的响应"""
         message_id = data.get("message_id")
-        print("开始响应-----:", data, self.pending_responses)
+        logger.debug(f"开始响应: {data}, pending_responses: {self.pending_responses}")
         if message_id in self.pending_responses:
             future = self.pending_responses[message_id]
             if not future.done():
