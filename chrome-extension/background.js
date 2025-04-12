@@ -69,10 +69,6 @@ function loadSettingsAndConnect() {
 // 处理消息
 function handleMessage(message, sender, sendResponse) {
 
-    console.log('handleMessage -> message:', message);
-    console.log('handleMessage -> sender:', sender);
-    console.log('handleMessage -> stack:', new Error().stack);
-
     switch (message.action) {
         case 'connect':
 
@@ -475,17 +471,23 @@ async function captureCurrentTab(options = {}) {
             throw new Error('无法获取当前标签页');
         }
 
-        const imageData = await captureManager.captureTab(options);
-
-        // 获取图片格式和质量设置
+        // 获取图片格式、质量和全页面截图设置
         const { imageFormat, imageQuality } = await new Promise(resolve => {
             chrome.storage.sync.get(['imageFormat', 'imageQuality'], (result) => {
                 resolve({
                     imageFormat: result.imageFormat || 'png',
-                    imageQuality: result.imageQuality || 90
+                    imageQuality: result.imageQuality || 90,
                 });
             });
         });
+
+        // 合并配置和传入的选项
+        const captureOptions = {
+            fullPage: options.fullPage,
+            area: options.area || null
+        };
+
+        const imageData = await captureManager.captureTab(captureOptions);
 
         return {
             url: tab.url,

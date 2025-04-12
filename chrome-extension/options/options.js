@@ -7,6 +7,7 @@
 const serverUrlInput = document.getElementById('serverUrl');
 const apiKeyInput = document.getElementById('apiKey');
 const autoConnectCheckbox = document.getElementById('autoConnect');
+const fullPageCapture = document.getElementById('fullPageCapture');
 const imageFormatSelect = document.getElementById('imageFormat');
 const imageQualityInput = document.getElementById('imageQuality');
 const qualityValueSpan = document.getElementById('qualityValue');
@@ -58,7 +59,8 @@ function loadSettings() {
         'imageFormat',
         'imageQuality',
         'extractImages',
-        'extractLinks'
+        'extractLinks',
+        'fullPageCapture'
     ], (result) => {
         // 设置服务器URL - 无论是否为空字符串都设置值
         serverUrlInput.value = result.serverUrl || '';
@@ -83,6 +85,9 @@ function loadSettings() {
         // 设置提取选项
         extractImagesCheckbox.checked = result.extractImages !== false;
         extractLinksCheckbox.checked = result.extractLinks !== false;
+
+        // 设置全屏截图选项
+        fullPageCapture.checked = result.fullPageCapture !== false;
     });
 }
 
@@ -134,7 +139,17 @@ async function saveSettings() {
         // 保存设置到存储
         await new Promise((resolve, reject) => {
             // 即使字段为空也会保存，确保覆盖旧值
-            console.log('saving settings', serverUrlInput.value, apiKeyInput.value, autoConnectCheckbox.checked, imageFormatSelect.value, parseInt(imageQualityInput.value), extractImagesCheckbox.checked, extractLinksCheckbox.checked)
+            console.log('saving settings',
+                {
+                    serverUrl: serverUrlInput.value, // 即使为空字符串也会保存
+                    apiKey: apiKeyInput.value, // 即使为空字符串也会保存
+                    autoConnect: autoConnectCheckbox.checked,
+                    imageFormat: imageFormatSelect.value,
+                    imageQuality: parseInt(imageQualityInput.value),
+                    extractImages: extractImagesCheckbox.checked,
+                    extractLinks: extractLinksCheckbox.checked,
+                    fullPageCapture: fullPageCapture.checked
+                })
             chrome.storage.sync.set({
                 serverUrl: serverUrlInput.value, // 即使为空字符串也会保存
                 apiKey: apiKeyInput.value, // 即使为空字符串也会保存
@@ -142,7 +157,8 @@ async function saveSettings() {
                 imageFormat: imageFormatSelect.value,
                 imageQuality: parseInt(imageQualityInput.value),
                 extractImages: extractImagesCheckbox.checked,
-                extractLinks: extractLinksCheckbox.checked
+                extractLinks: extractLinksCheckbox.checked,
+                fullPageCapture: fullPageCapture.checked
             }, () => {
                 if (chrome.runtime.lastError) {
                     reject(new Error(chrome.runtime.lastError.message));

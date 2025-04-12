@@ -64,7 +64,18 @@ function renderLogs(logs) {
             <div class="level">[${log.level.toUpperCase()}]</div>
             <div class="message">${log.message}</div>
             ${log.error ? `<div class="error-details">错误: ${log.error}</div>` : ''}
+            ${log.data ? `<div class="data-details" style="display:none;">额外数据: ${JSON.stringify(log.data)}</div>
+            <button class="toggle-data">显示/隐藏数据</button>` : ''}
         `;
+
+        // 为每个toggle-data按钮添加事件监听
+        if (log.data) {
+            const toggleBtn = logEntry.querySelector('.toggle-data');
+            toggleBtn.addEventListener('click', function () {
+                const dataDetails = this.parentElement.querySelector('.data-details');
+                dataDetails.style.display = dataDetails.style.display === 'none' ? 'block' : 'none';
+            });
+        }
 
         container.appendChild(logEntry);
     });

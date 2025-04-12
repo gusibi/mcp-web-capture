@@ -116,6 +116,7 @@ async def websocket_send_command(websocket: WebSocket, conn_id: Optional[str] = 
                     "action": data.get("action", data.get("command")),  # 兼容不同格式
                     "command": data["command"],
                     "url": data["url"],
+                    "fullPage": data.get("fullPage", False),
                     "message_id": data.get("message_id", "")
                 }
                 

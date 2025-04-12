@@ -194,13 +194,10 @@ async function captureCurrentTab() {
     try {
         // 禁用按钮，显示加载状态
         captureBtn.disabled = true;
-        console.log("截图中...")
         captureBtn.textContent = '截图中.........';
 
         // 检查连接状态
-        console.log("connectionStatus checking...")
         const isConnected = await checkConnectionStatus();
-        console.log("connectionStatus:", isConnected)
 
         if (isConnected) {
             // 连接到服务器时，发送截图请求到后台
@@ -218,7 +215,6 @@ async function captureCurrentTab() {
                     if (chrome.runtime.lastError) {
                         throw new Error(chrome.runtime.lastError.message);
                     }
-                    console.log("截图成功！图片已保存在本地。", dataUrl)
 
                     // 处理截图结果
                     handleCaptureResponse({
