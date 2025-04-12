@@ -4,7 +4,10 @@
  */
 
 // 导入模块
-importScripts('./lib/websocket.js', './lib/capture.js', './lib/extractor.js');
+importScripts('./lib/websocket.js', './lib/capture.js', './lib/extractor.js', './lib/logger.js');
+
+// 初始化日志记录器
+const logger = new Logger();
 
 // 初始化模块实例
 const websocketManager = new WebSocketManager();
@@ -286,10 +289,13 @@ async function handleWebSocketMessage(message) {
 
 // 处理截图指令
 async function handleCaptureCommand(data) {
+    logger.log('capture', 'info', '开始处理截图指令', data);
     try {
         // 如果指定了URL，先导航到该URL
         if (data.url) {
+            logger.log('capture', 'info', '准备导航到URL', { url: data.url });
             await navigateToUrl(data.url);
+            logger.log('capture', 'info', 'URL导航完成');
         }
 
         // 执行截图
@@ -297,22 +303,34 @@ async function handleCaptureCommand(data) {
             fullPage: data.fullPage !== false,
             area: data.area || null
         };
+        logger.log('capture', 'info', '准备执行截图', captureOptions);
 
         const captureResult = await captureCurrentTab(captureOptions);
+        logger.log('capture', 'info', '截图完成', {
+            success: true, type: 'response',
+            message_id: data.message_id,
+            command: 'capture',
+            success: true,
+            result: captureResult
+        });
 
         // 发送结果回服务器
+        logger.log('capture', 'info', '准备发送截图结果到服务器');
         websocketManager.sendMessage({
             type: 'response',
-            id: data.id,
+            message_id: data.message_id,
             command: 'capture',
             success: true,
             result: captureResult
         });
     } catch (error) {
+        // 记录错误日志
+        logger.log('capture', 'error', '截图失败', { error: error.message });
+
         // 发送错误回服务器
         websocketManager.sendMessage({
             type: 'response',
-            id: data.id,
+            message_id: data.message_id,
             command: 'capture',
             success: false,
             error: error.message

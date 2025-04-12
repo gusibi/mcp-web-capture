@@ -6,6 +6,107 @@
 class CaptureManager {
     constructor() {
         this.captureInProgress = false;
+        this.offscreenCreated = false;
+    }
+
+    /**
+     * 保存日志到chrome.storage.local
+     * @private
+     * @param {Object} logEntry 日志条目
+     */
+    async #saveLog(logEntry) {
+        try {
+            const { logs = [] } = await chrome.storage.local.get('logs');
+            logs.push(logEntry);
+            await chrome.storage.local.set({ logs });
+        } catch (error) {
+            console.error('[CaptureManager] Failed to save log:', error);
+        }
+    }
+
+    /**
+     * 创建或获取offscreen document
+     * @private
+     */
+    async #ensureOffscreenDocument() {
+        if (this.offscreenCreated) {
+            const logEntry = {
+                timestamp: Date.now(),
+                level: 'debug',
+                message: '[CaptureManager] Offscreen document already exists'
+            };
+            await this.#saveLog(logEntry);
+            return;
+        }
+
+        await this.#saveLog({
+            timestamp: Date.now(),
+            level: 'debug',
+            message: '[CaptureManager] Checking for existing offscreen documents'
+        });
+        const existingContexts = await chrome.runtime.getContexts({
+            contextTypes: ['OFFSCREEN_DOCUMENT']
+        });
+
+        if (existingContexts.length > 0) {
+            const logEntry = {
+                timestamp: Date.now(),
+                level: 'debug',
+                message: '[CaptureManager] Found existing offscreen document'
+            };
+            await this.#saveLog(logEntry);
+            this.offscreenCreated = true;
+            return;
+        }
+
+        const logEntry = {
+            timestamp: Date.now(),
+            level: 'debug',
+            message: '[CaptureManager] Creating new offscreen document'
+        };
+        await this.#saveLog(logEntry);
+        try {
+            await chrome.offscreen.createDocument({
+                url: 'offscreen/offscreen.html',
+                reasons: ['DOM_PARSER'],
+                justification: 'Image processing for screenshot capture'
+            });
+            const logEntry = {
+                timestamp: Date.now(),
+                level: 'debug',
+                message: '[CaptureManager] Offscreen document created successfully'
+            };
+            await this.#saveLog(logEntry);
+            this.offscreenCreated = true;
+        } catch (error) {
+            const logEntry = {
+                timestamp: Date.now(),
+                level: 'error',
+                message: '[CaptureManager] Failed to create offscreen document',
+                error: error.message
+            };
+            await this.#saveLog(logEntry);
+            throw error;
+        }
+    }
+
+    /**
+     * 发送消息到offscreen document
+     * @private
+     */
+    async #sendMessageToOffscreen(message) {
+        await this.#ensureOffscreenDocument();
+        return new Promise((resolve, reject) => {
+            chrome.runtime.sendMessage(message, response => {
+                if (chrome.runtime.lastError) {
+                    reject(new Error(chrome.runtime.lastError.message));
+                } else if (!response || response.error) {
+                    reject(new Error(response?.error || 'Unknown error'));
+                } else {
+                    resolve(response.result);
+                }
+            });
+        });
     }
 
     /**
@@ -16,31 +117,44 @@ class CaptureManager {
      * @returns {Promise<string>} 返回base64编码的图片数据
      */
     async captureTab(options = { fullPage: true }) {
+        console.debug('[CaptureManager] Starting captureTab with options:', options);
         if (this.captureInProgress) {
+            console.warn('[CaptureManager] Capture already in progress');
             throw new Error('已有截图任务正在进行中');
         }
 
         this.captureInProgress = true;
+        console.debug('[CaptureManager] Capture flag set to true');
 
         try {
-            // 获取当前活动标签页
+            console.debug('[CaptureManager] Querying active tab');
             const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
             if (!tab) {
+                console.error('[CaptureManager] No active tab found');
                 throw new Error('无法获取当前标签页');
             }
 
+            console.debug('[CaptureManager] Active tab found, id:', tab.id);
+            let result;
             if (options.fullPage) {
-                return await this.captureFullPage(tab.id);
+                console.debug('[CaptureManager] Starting full page capture');
+                result = await this.captureFullPage(tab.id);
             } else if (options.area) {
-                return await this.captureArea(tab.id, options.area);
+                console.debug('[CaptureManager] Starting area capture with area:', options.area);
+                result = await this.captureArea(tab.id, options.area);
             } else {
-                return await this.captureVisibleArea(tab.id);
+                console.debug('[CaptureManager] Starting visible area capture');
+                result = await this.captureVisibleArea(tab.id);
             }
+
+            console.debug('[CaptureManager] Capture completed successfully');
+            return result;
         } catch (error) {
-            console.error('截图失败:', error);
+            console.error('[CaptureManager] Capture failed:', error);
             throw error;
         } finally {
             this.captureInProgress = false;
+            console.debug('[CaptureManager] Capture flag reset to false');
         }
     }
 
@@ -50,11 +164,30 @@ class CaptureManager {
      * @returns {Promise<string>} 返回base64编码的图片数据
      */
     async captureVisibleArea(tabId) {
+        const initialLogEntry = {
+            timestamp: Date.now(),
+            level: 'debug',
+            message: `[CaptureManager] Starting visible area capture for tab: ${tabId}`
+        };
+        await this.#saveLog(initialLogEntry);
         return new Promise((resolve, reject) => {
             chrome.tabs.captureVisibleTab(null, { format: 'png' }, (dataUrl) => {
                 if (chrome.runtime.lastError) {
+                    const errorLogEntry = {
+                        timestamp: Date.now(),
+                        level: 'error',
+                        message: '[CaptureManager] Visible capture error',
+                        error: chrome.runtime.lastError.message
+                    };
+                    this.#saveLog(errorLogEntry);
                     reject(new Error(chrome.runtime.lastError.message));
                 } else {
+                    const successLogEntry = {
+                        timestamp: Date.now(),
+                        level: 'debug',
+                        message: '[CaptureManager] Visible capture completed'
+                    };
+                    this.#saveLog(successLogEntry);
                     resolve(dataUrl);
                 }
             });
@@ -67,14 +200,15 @@ class CaptureManager {
      * @returns {Promise<string>} 返回base64编码的图片数据
      */
     async captureFullPage(tabId) {
+        const logEntry = {
+            timestamp: Date.now(),
+            level: 'debug',
+            message: `[CaptureManager] Starting full page capture for tab: ${tabId}`
+        };
+        await this.#saveLog(logEntry);
+
         // 注入内容脚本获取页面尺寸
         const dimensions = await this.getPageDimensions(tabId);
-
-        // 创建一个画布来合成完整页面截图
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-        canvas.width = dimensions.width;
-        canvas.height = dimensions.height;
 
         // 原始滚动位置
         const originalScrollTop = await this.getScrollPosition(tabId);
@@ -84,6 +218,9 @@ class CaptureManager {
             const viewportHeight = dimensions.viewportHeight;
             const totalHeight = dimensions.height;
             const captureCount = Math.ceil(totalHeight / viewportHeight);
+
+            // 存储每个部分的截图
+            const captures = [];
 
             for (let i = 0; i < captureCount; i++) {
                 // 设置滚动位置
@@ -96,14 +233,19 @@ class CaptureManager {
                 // 捕获当前可见区域
                 const dataUrl = await this.captureVisibleArea(tabId);
 
-                // 将截图绘制到画布上
-                const img = await this.loadImage(dataUrl);
+                // 计算当前部分在完整页面中的位置
                 const y = Math.min(i * viewportHeight, totalHeight - viewportHeight);
-                ctx.drawImage(img, 0, y, dimensions.width, viewportHeight);
+                const height = viewportHeight;
+
+                // 添加到截图数组
+                captures.push({ dataUrl, y, height });
             }
 
-            // 返回完整页面的截图
-            return canvas.toDataURL('image/png');
+            // 使用offscreen document处理图像合成
+            return await this.#sendMessageToOffscreen({
+                action: 'processFullPageCapture',
+                data: { dimensions, captures }
+            });
         } finally {
             // 恢复原始滚动位置
             await this.setScrollPosition(tabId, originalScrollTop);
@@ -117,6 +259,13 @@ class CaptureManager {
      * @returns {Promise<string>} 返回base64编码的图片数据
      */
     async captureArea(tabId, area) {
+        const logEntry = {
+            timestamp: Date.now(),
+            level: 'debug',
+            message: `[CaptureManager] Starting area capture for tab: ${tabId}, area: ${JSON.stringify(area)}`
+        };
+        await this.#saveLog(logEntry);
+
         // 确保区域在页面内
         const dimensions = await this.getPageDimensions(tabId);
         const validArea = {
@@ -139,18 +288,18 @@ class CaptureManager {
             // 捕获可见区域
             const fullDataUrl = await this.captureVisibleArea(tabId);
 
-            // 裁剪指定区域
-            const img = await this.loadImage(fullDataUrl);
-            const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d');
-            canvas.width = validArea.width;
-            canvas.height = validArea.height;
+            // 获取当前滚动位置
+            const currentScrollPosition = await this.getScrollPosition(tabId);
 
-            // 计算相对于可视区域的坐标
-            const relativeY = validArea.y - await this.getScrollPosition(tabId);
-            ctx.drawImage(img, validArea.x, relativeY, validArea.width, validArea.height, 0, 0, validArea.width, validArea.height);
-
-            return canvas.toDataURL('image/png');
+            // 使用offscreen document处理图像裁剪
+            return await this.#sendMessageToOffscreen({
+                action: 'processAreaCapture',
+                data: {
+                    fullDataUrl,
+                    area: validArea,
+                    scrollPosition: currentScrollPosition
+                }
+            });
         } finally {
             // 恢复原始滚动位置
             await this.setScrollPosition(tabId, originalScrollTop);
@@ -163,6 +312,13 @@ class CaptureManager {
      * @returns {Promise<Object>} 页面尺寸信息
      */
     async getPageDimensions(tabId) {
+        const logEntry = {
+            timestamp: Date.now(),
+            level: 'debug',
+            message: `[CaptureManager] Getting page dimensions for tab: ${tabId}`
+        };
+        await this.#saveLog(logEntry);
+
         return new Promise((resolve, reject) => {
             chrome.scripting.executeScript({
                 target: { tabId },
@@ -176,10 +332,29 @@ class CaptureManager {
                 }
             }, (results) => {
                 if (chrome.runtime.lastError) {
+                    const logEntry = {
+                        timestamp: Date.now(),
+                        level: 'error',
+                        message: '[CaptureManager] Failed to get page dimensions',
+                        error: chrome.runtime.lastError.message
+                    };
+                    this.#saveLog(logEntry);
                     reject(new Error(chrome.runtime.lastError.message));
                 } else if (!results || !results[0]) {
+                    const logEntry = {
+                        timestamp: Date.now(),
+                        level: 'error',
+                        message: '[CaptureManager] Failed to get page dimensions: no results'
+                    };
+                    this.#saveLog(logEntry);
                     reject(new Error('无法获取页面尺寸'));
                 } else {
+                    const logEntry = {
+                        timestamp: Date.now(),
+                        level: 'debug',
+                        message: `[CaptureManager] Got page dimensions: ${JSON.stringify(results[0].result)}`
+                    };
+                    this.#saveLog(logEntry);
                     resolve(results[0].result);
                 }
             });
@@ -232,19 +407,7 @@ class CaptureManager {
         });
     }
 
-    /**
-     * 加载图片
-     * @param {string} dataUrl 图片数据URL
-     * @returns {Promise<HTMLImageElement>} 图片元素
-     */
-    loadImage(dataUrl) {
-        return new Promise((resolve, reject) => {
-            const img = new Image();
-            img.onload = () => resolve(img);
-            img.onerror = () => reject(new Error('加载图片失败'));
-            img.src = dataUrl;
-        });
-    }
+    // 注意：loadImage方法已移至offscreen.js中，不再需要在这里实现
 
     /**
      * 保存截图到本地

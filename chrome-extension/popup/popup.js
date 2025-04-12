@@ -120,6 +120,11 @@ function setupEventListeners() {
     openOptionsBtn.addEventListener('click', () => {
         chrome.runtime.openOptionsPage();
     });
+
+    // 打开日志页面按钮
+    document.getElementById('openLogsBtn').addEventListener('click', () => {
+        chrome.tabs.create({ url: chrome.runtime.getURL('logs/logs.html') });
+    });
 }
 
 // 更新连接UI状态

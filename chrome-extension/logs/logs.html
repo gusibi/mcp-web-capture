@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>日志查看器</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .controls { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+        .filter-group { display: flex; gap: 5px; align-items: center; }
+        .search-group { display: flex; gap: 5px; align-items: center; flex-grow: 1; }
+        .date-group { display: flex; gap: 5px; align-items: center; }
+        .log-entry { margin-bottom: 10px; padding: 12px; border-radius: 4px; }
+        .debug { background-color: #e6f7ff; border-left: 4px solid #1890ff; }
+        .info { background-color: #e6ffed; border-left: 4px solid #52c41a; }
+        .warn { background-color: #fff7e6; border-left: 4px solid #faad14; }
+        .error { background-color: #ffebee; border-left: 4px solid #f5222d; }
+        #logs { margin-top: 20px; }
+        button { padding: 6px 12px; border-radius: 4px; border: 1px solid #d9d9d9; background: white; cursor: pointer; }
+        button:hover { background: #f5f5f5; }
+        button.active { background: #1890ff; color: white; border-color: #1890ff; }
+        input[type="text"], input[type="datetime-local"] { padding: 6px; border-radius: 4px; border: 1px solid #d9d9d9; }
+        .timestamp { color: #666; font-size: 0.9em; }
+        .level { font-weight: bold; }
+        .message { margin-top: 5px; }
+        .error-details { margin-top: 5px; color: #f5222d; }
+    </style>
+</head>
+<body>
+    <h1>截图工具日志</h1>
+    <div class="controls">
+        <div class="filter-group">
+            <button id="level-all" class="active">全部</button>
+            <button id="level-debug" data-level="debug">Debug</button>
+            <button id="level-info" data-level="info">Info</button>
+            <button id="level-warn" data-level="warn">Warn</button>
+            <button id="level-error" data-level="error">Error</button>
+        </div>
+        <div class="search-group">
+            <input type="text" id="search" placeholder="搜索日志..." />
+        </div>
+        <div class="date-group">
+            <input type="datetime-local" id="start-time" />
+            <span>至</span>
+            <input type="datetime-local" id="end-time" />
+        </div>
+        <button id="refresh-logs">刷新</button>
+        <button id="clear-logs">清除</button>
+    </div>
+    <div id="logs"></div>
+
+    <script src="logs.js"></script>
+</body>
+</html>
