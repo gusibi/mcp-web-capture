@@ -295,12 +295,19 @@
                             return candidates.length > 0 ? candidates[0].element : null;
                         }
 
+                        // 获取meta标签内容
+                        function getMetaContent(name) {
+                            const meta = document.querySelector(`meta[name="${name}"], meta[property="og:${name}"], meta[property="twitter:${name}"]`);
+                            return meta ? meta.content : null;
+                        }
+
                         // 提取主要内容
                         const mainElement = findMainContent();
 
                         if (!mainElement) {
                             return {
-                                title: document.title,
+                                title: getMetaContent('title') || document.title,
+                                description: getMetaContent('description'),
                                 url: window.location.href,
                                 content: document.body.innerText.substring(0, 1000) + '...',
                                 error: '无法识别主要内容区域'
@@ -332,7 +339,8 @@
 
                         // 返回结构化内容
                         return {
-                            title: document.title,
+                            title: getMetaContent('title') || document.title,
+                            description: getMetaContent('description'),
                             url: window.location.href,
                             content: mainElement.innerText,
                             html: mainElement.innerHTML,

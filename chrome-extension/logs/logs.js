@@ -54,7 +54,8 @@ function renderLogs(logs) {
         return;
     }
 
-    logs.forEach(log => {
+    // 倒序显示日志
+    logs.slice().reverse().forEach(log => {
         const logEntry = document.createElement('div');
         logEntry.className = `log-entry ${log.level}`;
 

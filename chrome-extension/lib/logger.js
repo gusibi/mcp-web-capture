@@ -90,6 +90,46 @@ class Logger {
             });
         });
     }
+
+    /**
+     * 错误日志快捷方法
+     * @param {string} module 模块名称
+     * @param {string} message 日志消息
+     * @param {Object} [data] 额外数据
+     */
+    error(module, message, data = null) {
+        this.log(module, 'error', message, data);
+    }
+
+    /**
+     * 调试日志快捷方法
+     * @param {string} module 模块名称
+     * @param {string} message 日志消息
+     * @param {Object} [data] 额外数据
+     */
+    debug(module, message, data = null) {
+        this.log(module, 'debug', message, data);
+    }
+
+    /**
+   * 调试日志快捷方法
+   * @param {string} module 模块名称
+   * @param {string} message 日志消息
+   * @param {Object} [data] 额外数据
+   */
+    info(module, message, data = null) {
+        this.log(module, 'info', message, data);
+    }
+
+    /**
+  * 调试日志快捷方法
+  * @param {string} module 模块名称
+  * @param {string} message 日志消息
+  * @param {Object} [data] 额外数据
+  */
+    warn(module, message, data = null) {
+        this.log(module, 'warn', message, data);
+    }
 }
 
 

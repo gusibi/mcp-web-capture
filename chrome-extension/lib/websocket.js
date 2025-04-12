@@ -12,6 +12,9 @@ class WebSocketManager {
         this.errorMessage = null; // 存储最新的错误消息
         this.connectTimeoutTimer = null; // 连接超时计时器
         this.CONNECT_TIMEOUT_MS = 10000; // 10秒连接超时
+        this.keepAliveInterval = 25000; // 25秒心跳间隔
+        this.keepAliveTimer = null; // 心跳计时器
+        this.PING_MESSAGE = JSON.stringify({ type: 'ping' }); // 心跳消息
 
         // 从存储中加载配置
         this.loadConfig();
@@ -177,6 +180,9 @@ class WebSocketManager {
         console.log('WebSocket连接已建立');
         this.updateStatus('connected');
         this.reconnectAttempts = 0; // 重置重连尝试次数
+
+        // 启动心跳机制
+        this.startKeepAlive();
 
         // 发送认证消息 (如果需要)
         if (this.apiKey) {
@@ -425,8 +431,10 @@ class WebSocketManager {
     disconnect(isConfigUpdate = false) {
         clearTimeout(this.reconnectTimer); // 清除重连计时器
         clearTimeout(this.connectTimeoutTimer); // 清除连接超时计时器
+        clearInterval(this.keepAliveTimer); // 清除心跳计时器
         this.reconnectTimer = null;
         this.connectTimeoutTimer = null;
+        this.keepAliveTimer = null;
 
         if (this.socket) {
             console.log(`主动断开WebSocket连接，连接ID: ${this.connId}`);
@@ -453,6 +461,21 @@ class WebSocketManager {
         // 可以在连接失败或成功获取新 ID 时再更新 connId。
         // this.connId = null;
         this.reconnectAttempts = 0; // 重置重连次数
+    }
+
+    /**
+     * 启动心跳机制
+     */
+    startKeepAlive() {
+        if (this.keepAliveTimer) {
+            clearInterval(this.keepAliveTimer);
+        }
+        this.keepAliveTimer = setInterval(() => {
+            if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+                this.socket.send(this.PING_MESSAGE);
+                console.log('发送心跳消息');
+            }
+        }, this.keepAliveInterval);
     }
 
     /**

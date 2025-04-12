@@ -112,7 +112,7 @@ async def websocket_send_command(websocket: WebSocket, conn_id: Optional[str] = 
             if "command" in data and "url" in data:
                 # 构造消息并发送给浏览器
                 message = {
-                    "source": "ws_command",
+                    "source": data.get("source","ws_command"),
                     "action": data.get("action", data.get("command")),  # 兼容不同格式
                     "command": data["command"],
                     "url": data["url"],

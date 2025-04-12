@@ -35,7 +35,7 @@ function init() {
 
 
     // 监听WebSocket消息
-    console.log('[background.js] 注册WebSocket消息监听器');
+    logger.log('background', 'info', '注册WebSocket消息监听器');
     websocketManager.on('message', handleWebSocketMessage);
 
 
@@ -71,47 +71,38 @@ function handleMessage(message, sender, sendResponse) {
 
     switch (message.action) {
         case 'connect':
-
             connectToServer()
                 .then(status => sendResponse(status))
                 .catch(error => sendResponse({ success: false, error: error.message }));
             return true; // 异步响应
-
         case 'disconnect':
             disconnectFromServer()
                 .then(status => sendResponse(status))
                 .catch(error => sendResponse({ success: false, error: error.message }));
             return true; // 异步响应
-
         case 'getStatus':
-
             const response = {
                 success: true,
                 status: connectionStatus
             };
-
             sendResponse(response);
             return true; // 异步响应
-
         case 'captureTab':
             captureCurrentTab(message.options)
                 .then(result => sendResponse({ success: true, result }))
                 .catch(error => sendResponse({ success: false, error: error.message }));
             return true; // 异步响应
-
         case 'extractContent':
             extractTabContent(message.options)
                 .then(result => sendResponse({ success: true, result }))
                 .catch(error => sendResponse({ success: false, error: error.message }));
             return true; // 异步响应
-
         case 'settings_updated':
             // 设置已更新，直接调用WebSocketManager的updateConfig方法
             // 这样可以确保当配置被清空时，WebSocket连接会立即断开
             websocketManager.updateConfig();
             sendResponse({ success: true });
             break;
-
         default:
             sendResponse({ success: false, error: '未知操作' });
     }
@@ -121,10 +112,9 @@ function handleMessage(message, sender, sendResponse) {
 async function connectToServer() {
     try {
         await websocketManager.connect();
-
         // 获取实际的连接状态
         const status = websocketManager.getStatus();
-        console.log('connectToServer -> status:', status);
+        logger.log('connection', 'debug', 'connectToServer状态', { status });
 
         // 检查连接状态
         if (status.status === 'connected') {
@@ -136,7 +126,7 @@ async function connectToServer() {
             return { success: false, error: '连接状态: ' + status.status };
         }
     } catch (error) {
-        console.error('连接服务器失败:', error);
+        logger.error('connection', '连接服务器失败', { error: error.message });
         return { success: false, error: error.message };
     }
 }
@@ -147,7 +137,7 @@ async function disconnectFromServer() {
         await websocketManager.disconnect();
         return { success: true };
     } catch (error) {
-        console.error('断开连接失败:', error);
+        logger.error('connection', '断开连接失败', { error: error.message });
         return { success: false, error: error.message };
     }
 }
@@ -172,17 +162,17 @@ function handleConnectionStatusChange(status) {
             status: connectionStatus
         }).catch(() => {
             // 弹出窗口可能未打开，忽略错误
-            console.log('弹出窗口未打开，忽略状态更新消息');
+            logger.log('background', 'debug', '弹出窗口未打开，忽略状态更新消息');
         });
     } catch (error) {
         // 静默处理发送消息失败的情况
-        console.log('发送状态更新消息失败:', error.message);
+        logger.log('background', 'error', '发送状态更新消息失败', { error: error.message });
     }
 }
 
 // 处理接收到的WebSocket消息
 async function handleWebSocketMessage(message) {
-    console.log('handleWebSocketMessage -> message:', message);
+    logger.log('background', 'debug', '收到WebSocket消息', { message });
 
     try {
         // 根据消息格式处理
@@ -198,88 +188,84 @@ async function handleWebSocketMessage(message) {
                 try {
                     data = JSON.parse(message.data);
                 } catch (error) {
-                    console.error('解析JSON失败:', error);
+                    logger.error('websocket', '解析JSON失败', { error: error.message });
                     data = message.data; // 如果解析失败，使用原始字符串
                 }
             } else if (typeof message.data === 'object') {
                 // 如果data已经是对象，直接使用
-                console.log('handleWebSocketMessage -> data是对象，直接使用');
+                logger.log('background', 'debug', 'handleWebSocketMessage -> data是对象，直接使用', { message });
                 data = message.data;
             }
         } else if (typeof message === 'object') {
             // 消息本身可能就是数据
-            console.log('handleWebSocketMessage -> 消息本身作为数据使用');
+            logger.log('background', 'debug', 'handleWebSocketMessage -> 消息本身作为数据使用', { message });
             data = message;
         }
 
         // 确保data是有效的
         if (!data || typeof data !== 'object') {
-            console.warn('收到无效消息格式:', message);
+            logger.warn('websocket', '收到无效消息格式', { message });
             return;
         }
 
-        console.log('handleWebSocketMessage -> 处理后的data:', data);
+        logger.log('background', 'debug', 'handleWebSocketMessage -> 处理后的data', { data });
 
         // 检查消息来源是否为ws_command
         if (data.source === 'ws_command') {
-            console.log('收到来自websocket_send_command的消息:', data);
+            logger.log('background', 'debug', '收到来自websocket_send_command的消息', { data });
             // 处理来自websocket_send_command的消息
-            console.log("action:", data.action, "url:", data.url)
-            if (data.action === 'open' && data.url) {
+            logger.log('background', 'debug', '收到websocket_send_command指令', { action: data.action, command: data.command, url: data.url });
+            if (data.command === 'open' && data.url) {
                 await handleCaptureCommand(data);
                 return;
             }
+
+            const responseMessage = {
+                type: 'response',
+                message_id: data.message_id,
+                success: true,
+                error: false,
+                content: data // 将原始消息内容一并返回
+            };
             // 返回默认消息回服务器
-            console.log('handleWebSocketMessage -> 返回默认消息回服务器---->>>>>', {
-                type: 'response',
-                message_id: data.message_id,
-                success: true,
-                error: false,
-                content: data // 将原始消息内容一并返回
-            });
-            websocketManager.sendMessage({
-                type: 'response',
-                message_id: data.message_id,
-                success: true,
-                error: false,
-                content: data // 将原始消息内容一并返回
-            });
+            logger.log('background', 'debug', '返回默认消息回服务器', { responseMessage });
+            websocketManager.sendMessage(responseMessage);
             return;
         }
 
         // 处理标准指令格式的消息
         const command = data.command;
-        console.log('handleWebSocketMessage -> 检查command字段:', command);
+        logger.debug('background', '检查command字段', { command });
         if (command) {
-            console.log('handleWebSocketMessage -> 处理command:', command);
+            logger.debug('background', '处理command', { command });
             switch (command) {
                 case 'capture':
-                    console.log('handleWebSocketMessage -> 执行capture命令');
+                    logger.debug('background', '执行capture命令');
                     await handleCaptureCommand(data);
                     break;
                 case 'extract':
-                    console.log('handleWebSocketMessage -> 执行extract命令');
+                    logger.debug('background', '执行extract命令');
                     await handleExtractCommand(data);
                     break;
 
                 case 'navigate':
-                    console.log('handleWebSocketMessage -> 执行navigate命令');
+                    logger.debug('background', '执行navigate命令');
                     await handleNavigateCommand(data);
                     break;
 
                 case 'open':
-                    console.log('handleWebSocketMessage -> 执行open命令');
+                    logger.debug('background', '执行open命令');
                     await handleOpenCommand(data);
                     break;
 
                 default:
-                    console.warn('未知指令:', command);
+                    logger.warn('websocket', '未知指令', { command });
             }
         } else {
-            console.warn('消息中没有command字段:', data);
+            logger.warn('websocket', '消息中没有command字段', { data });
         }
     } catch (error) {
-        console.error('处理WebSocket消息失败:', error);
+        logger.error('websocket', '处理WebSocket消息失败', { error: error.message });
     }
 }
 
@@ -321,7 +307,7 @@ async function handleCaptureCommand(data) {
         });
     } catch (error) {
         // 记录错误日志
-        logger.log('capture', 'error', '截图失败', { error: error.message });
+        logger.error('capture', '截图失败', { error: error.message });
 
         // 发送错误回服务器
         websocketManager.sendMessage({
@@ -337,9 +323,13 @@ async function handleCaptureCommand(data) {
 // 处理内容提取指令
 async function handleExtractCommand(data) {
     try {
+        logger.log('extract', 'info', '开始处理内容提取指令', { message_id: data.message_id, url: data.url });
+
         // 如果指定了URL，先导航到该URL
         if (data.url) {
+            logger.log('extract', 'info', '准备导航到URL', { url: data.url });
             await navigateToUrl(data.url);
+            logger.log('extract', 'info', 'URL导航完成');
         }
 
         // 执行内容提取
@@ -349,25 +339,32 @@ async function handleExtractCommand(data) {
             customSelectors: data.selectors || null
         };
 
+        logger.log('extract', 'info', '准备执行内容提取', extractOptions);
         const extractResult = await extractTabContent(extractOptions);
+        logger.log('extract', 'info', '内容提取完成', { result: extractResult });
 
         // 发送结果回服务器
+        logger.log('extract', 'info', '准备发送提取结果到服务器');
         websocketManager.sendMessage({
             type: 'response',
-            id: data.id,
+            message_id: data.message_id,
             command: 'extract',
             success: true,
             result: extractResult
         });
+        logger.log('extract', 'info', '提取结果已发送到服务器');
     } catch (error) {
+        logger.error('extract', '内容提取失败', { error: error.message });
+
         // 发送错误回服务器
         websocketManager.sendMessage({
             type: 'response',
-            id: data.id,
+            message_id: data.message_id,
             command: 'extract',
             success: false,
             error: error.message
         });
+        logger.log('extract', 'error', '错误信息已发送到服务器');
     }
 }
 
@@ -383,7 +380,7 @@ async function handleNavigateCommand(data) {
         // 发送结果回服务器
         websocketManager.sendMessage({
             type: 'response',
-            id: data.id,
+            message_id: data.message_id,
             command: 'navigate',
             success: true,
             url: data.url
@@ -392,7 +389,7 @@ async function handleNavigateCommand(data) {
         // 发送错误回服务器
         websocketManager.sendMessage({
             type: 'response',
-            id: data.id,
+            message_id: data.message_id,
             command: 'navigate',
             success: false,
             error: error.message
@@ -412,7 +409,7 @@ async function handleOpenCommand(data) {
         // 发送结果回服务器
         websocketManager.sendMessage({
             type: 'response',
-            id: data.id || 'open_' + Date.now(), // 确保有ID，即使原始消息没有提供
+            message_id: data.message_id || 'open_' + Date.now(), // 确保有ID，即使原始消息没有提供
             command: 'open',
             success: true,
             url: data.url
@@ -421,7 +418,7 @@ async function handleOpenCommand(data) {
         // 发送错误回服务器
         websocketManager.sendMessage({
             type: 'response',
-            id: data.id || 'open_' + Date.now(),
+            message_id: data.message_id || 'open_' + Date.now(),
             command: 'open',
             success: false,
             error: error.message
@@ -498,7 +495,7 @@ async function captureCurrentTab(options = {}) {
             quality: imageQuality
         };
     } catch (error) {
-        console.error('截图失败:', error);
+        logger.error('capture', '截图失败', { error: error.message });
         throw error;
     }
 }
@@ -520,7 +517,7 @@ async function extractTabContent(options = {}) {
             content
         };
     } catch (error) {
-        console.error('内容提取失败:', error);
+        logger.error('extract', '内容提取失败', { error: error.message });
         throw error;
     }
 }
