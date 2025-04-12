@@ -224,7 +224,6 @@ async function handleWebSocketMessage(message) {
                 type: 'response',
                 message_id: data.message_id,
                 success: true,
-                error: false,
                 content: data // 将原始消息内容一并返回
             };
             // 返回默认消息回服务器
@@ -259,7 +258,15 @@ async function handleWebSocketMessage(message) {
                     break;
 
                 default:
+                    const responseMessage = {
+                        type: 'response',
+                        message_id: data.message_id,
+                        success: false,
+                        error: `未知指令: ${command}`,
+                        content: data // 将原始消息内容一并返回
+                    };
                     logger.warn('websocket', '未知指令', { command });
+                    websocketManager.sendMessage(responseMessage);
             }
         } else {
             logger.warn('websocket', '消息中没有command字段', { data });
@@ -288,27 +295,19 @@ async function handleCaptureCommand(data) {
         logger.log('capture', 'info', '准备执行截图', captureOptions);
 
         const captureResult = await captureCurrentTab(captureOptions);
-        logger.log('capture', 'info', '截图完成', {
+        const responseMessage = {
             success: true, type: 'response',
             message_id: data.message_id,
             command: 'capture',
             success: true,
             result: captureResult
-        });
-
+        }
         // 发送结果回服务器
-        logger.log('capture', 'info', '准备发送截图结果到服务器');
-        websocketManager.sendMessage({
-            type: 'response',
-            message_id: data.message_id,
-            command: 'capture',
-            success: true,
-            result: captureResult
-        });
+        logger.log('capture', 'info', '截图完成,准备发送截图结果到服务器', responseMessage);
+        websocketManager.sendMessage(responseMessage);
     } catch (error) {
         // 记录错误日志
         logger.error('capture', '截图失败', { error: error.message });
-
         // 发送错误回服务器
         websocketManager.sendMessage({
             type: 'response',

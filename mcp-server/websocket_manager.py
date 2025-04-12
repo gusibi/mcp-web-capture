@@ -49,9 +49,7 @@ class WebSocketManager:
         """
         if not self.active_connections:
             raise ConnectionError("没有活动的 WebSocket 连接")
-        logger.debug("正在发送消息...")
-        logger.debug(f"target_conn_id: {target_conn_id}")
-        logger.debug(f"message: {message}")
+        logger.debug(f"正在发送消息, target_conn_id: {target_conn_id}, message: {message}")
 
         # 如果没有指定 conn_id，默认选择第一个连接
         websocket = (

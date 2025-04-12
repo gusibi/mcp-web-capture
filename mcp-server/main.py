@@ -158,7 +158,7 @@ mcp_server = add_mcp_server(
 )
 
 @mcp_server.tool()
-async def screenshot(url: str) -> str:
+async def screenshot(url: str, fullPage=False) -> str:
     """
     捕获指定URL的网页截图
     
@@ -166,6 +166,7 @@ async def screenshot(url: str) -> str:
     
     参数:
         url: 要截图的网页URL
+        fullPage: 是否捕获整个页面，默认为False
         
     返回:
         Base64编码的图片数据字符串
@@ -181,21 +182,61 @@ async def screenshot(url: str) -> str:
         logger.info(f"执行网页截图: {url}")
         response = await ws_manager.send_message({
             "source": "mcp_client",
-            "action": "screenshot", 
-            "command": "screenshot", 
-            "url": url
+            "action": "mcp_request", 
+            "command": "capture", 
+            "url": url,
+            "fullPage": fullPage,
         }, target_conn_id=conn_id)
         
         # 检查响应中是否包含图片数据
-        if "image_data" in response:
+        if response.get("result", {}).get("imageData", ""):
             logger.info(f"成功获取网页截图: {url}")
-            return response.get("image_data")
+            return response.get("result", {}).get("imageData", "")
         else:
             logger.warning(f"截图响应中未包含图片数据: {response}")
             return ""
     except ConnectionError as e:
         logger.error(f"截图操作失败: {str(e)}")
         return f"截图失败: {str(e)}"
+
+@mcp_server.tool()
+async def extract(url: str ) -> str:
+    """
+    提取指定URL的网页内容
+
+    通过浏览器扩展提取指定URL的网页内容，并返回提取的文本数据
+
+    参数:
+        url: 要提取内容的网页URL
+    返回:
+        提取的文本数据字符串
+    """
+    # 获取浏览器连接ID
+    conn_id = get_browser_conn_id(settings.connect_id)
+    if not conn_id:
+        logger.error("未配置浏览器连接ID，无法执行 extract 操作")
+        return "未获取到浏览器连接ID，请检查配置"
+        
+    try:
+        # 构造截图命令并发送到浏览器
+        logger.info(f"执行网页截图: {url}")
+        response = await ws_manager.send_message({
+            "source": "mcp_client",
+            "action": "mcp_request", 
+            "command": "extract", 
+            "url": url,
+        }, target_conn_id=conn_id)
+        
+        if response.get("result", {}).get("content", {}):
+            logger.info(f"成功获取网页截图: {url}")
+            return response.get("result", {}).get("content", {}).get("content", "")
+        else:
+            logger.warning(f"extract 响应中未包含内容数据: {response}")
+            return ""
+    except ConnectionError as e:
+        logger.error(f"extract 操作失败: {str(e)}")
+        return f"extract 失败: {str(e)}"
+
 
 @mcp_server.tool()
 async def add(a: int, b: int) -> int:
