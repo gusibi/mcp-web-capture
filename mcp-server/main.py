@@ -1,4 +1,4 @@
-from typing import Dict, Optional
+from typing import  Optional
 import uvicorn
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi_mcp import add_mcp_server

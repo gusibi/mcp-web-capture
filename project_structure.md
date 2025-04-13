@@ -25,30 +25,31 @@ browser-tools-mcp/
 │   ├── lib/                     # 库文件
 │   │   ├── websocket.js         # WebSocket 连接管理
 │   │   ├── capture.js           # 截图功能
-│   │   └── extractor.js         # 内容提取功能
+│   │   ├── extractor.js         # 内容提取功能
+│   │   └── logger.js           # 日志记录功能
+│   ├── logs/                    # 日志模块
+│   │   ├── logs.html            # 日志页面
+│   │   └── logs.js              # 日志处理脚本
+│   ├── offscreen/               # 离屏渲染模块
+│   │   ├── offscreen.html       # 离屏页面
+│   │   └── offscreen.js         # 离屏脚本
 │   └── icons/                   # 图标资源
 │       ├── icon16.png           # 16x16 图标
 │       ├── icon48.png           # 48x48 图标
 │       └── icon128.png          # 128x128 图标
-└── python-backend/             # Python 后端服务目录
+└── mcp-server/                 # Python 后端服务目录
     ├── requirements.txt         # 依赖包列表
     ├── config.py                # 配置文件
-    ├── main.py                # 主服务器入口
+    ├── main.py                  # 主服务器入口
     ├── mcp_protocol.py          # MCP 协议处理
-    ├── task_queue.py            # 任务队列管理
-    ├── handlers/                # 指令处理器
-    │   ├── __init__.py          # 初始化文件
-    │   ├── capture_handler.py   # 截图指令处理
-    │   └── extract_handler.py   # 内容提取指令处理
-    ├── utils/                   # 工具函数
-    │   ├── __init__.py          # 初始化文件
-    │   ├── image_utils.py       # 图片处理工具
-    │   ├── content_parser.py    # 内容解析工具
-    │   └── security.py          # 安全相关工具
-    └── plugins/                 # 插件系统
-        ├── __init__.py          # 初始化文件
-        ├── plugin_manager.py    # 插件管理器
-        └── example_plugin.py    # 示例插件
+    ├── websocket_manager.py     # WebSocket 管理
+    ├── logger.py                # 日志模块
+    ├── decorators.py            # 装饰器
+    ├── handlers/                # 请求处理器
+    │   ├── __init__.py         # 初始化文件
+    │   ├── capture_handler.py   # 截图处理器
+    │   └── extract_handler.py   # 内容提取处理器
+    └── pyproject.toml           # 项目配置
 ```
 
 ## 技术栈
