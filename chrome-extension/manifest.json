@@ -45,6 +45,6 @@
     "downloads"
   ],
   "host_permissions": [
-    "<all_urls>"
+    "<all_urls>" // 需要访问所有网址以采集网页内容元素，并通过WebSocket与指定服务器建立通信
   ]
 }

@@ -219,7 +219,7 @@ async def extract(url: str ) -> str:
         
     try:
         # 构造截图命令并发送到浏览器
-        logger.info(f"执行网页截图: {url}")
+        logger.info(f"执行网页内容抓取: {url}")
         response = await ws_manager.send_message({
             "source": "mcp_client",
             "action": "mcp_request", 
@@ -228,7 +228,7 @@ async def extract(url: str ) -> str:
         }, target_conn_id=conn_id)
         
         if response.get("result", {}).get("content", {}):
-            logger.info(f"成功获取网页截图: {url}")
+            logger.info(f"成功获取内容: {url}")
             return response.get("result", {}).get("content", {}).get("content", "")
         else:
             logger.warning(f"extract 响应中未包含内容数据: {response}")
